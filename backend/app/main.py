@@ -407,6 +407,117 @@ async def get_line_stations(line_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/lines/{line_id}/graph")
+async def get_line_graph(line_id: str):
+    """Get the full subgraph for a line: stations, zones, bike points, and relationships."""
+    client = get_memory_client()
+    try:
+        result = await client.graph.execute_read(
+            """
+            MATCH (s:Station)-[r:ON_LINE]->(l:Line {lineId: $lineId})
+            WITH s, r.sequence AS seq, l
+            ORDER BY seq
+            OPTIONAL MATCH (s)-[:IN_ZONE]->(z:Zone)
+            OPTIONAL MATCH (b:BikePoint)-[:NEAR_STATION]->(s)
+            RETURN s.naptanId AS naptanId, s.name AS name,
+                   s.lat AS lat, s.lon AS lon, s.zone AS zone,
+                   seq AS sequence,
+                   l.name AS lineName, l.color AS lineColor,
+                   collect(DISTINCT z.number) AS zones,
+                   collect(DISTINCT {id: b.id, name: b.name, lat: b.lat, lon: b.lon,
+                                     nbBikes: b.nbBikes, nbDocks: b.nbDocks}) AS bikePoints
+            ORDER BY sequence
+            """,
+            {"lineId": line_id},
+        )
+
+        nodes = []
+        relationships = []
+        seen_zone_ids = set()
+        seen_bp_ids = set()
+        station_ids = []
+
+        for row in result:
+            r = dict(row)
+            station_id = r["naptanId"]
+            station_ids.append(station_id)
+
+            # Station node
+            nodes.append({
+                "id": station_id,
+                "label": r["name"],
+                "type": "Station",
+                "properties": {
+                    "lat": r["lat"],
+                    "lon": r["lon"],
+                    "zone": r["zone"],
+                    "sequence": r["sequence"],
+                    "line": r["lineName"],
+                    "lineColor": r["lineColor"],
+                },
+            })
+
+            # Zone nodes and IN_ZONE relationships
+            for zone_num in r["zones"]:
+                if zone_num is None:
+                    continue
+                zone_id = f"zone-{zone_num}"
+                if zone_id not in seen_zone_ids:
+                    seen_zone_ids.add(zone_id)
+                    nodes.append({
+                        "id": zone_id,
+                        "label": f"Zone {zone_num}",
+                        "type": "Zone",
+                        "properties": {"number": zone_num},
+                    })
+                relationships.append({
+                    "id": f"inzone-{station_id}-{zone_num}",
+                    "source": station_id,
+                    "target": zone_id,
+                    "type": "IN_ZONE",
+                })
+
+            # BikePoint nodes and NEAR_STATION relationships
+            for bp in r["bikePoints"]:
+                if bp.get("id") is None:
+                    continue
+                bp_id = bp["id"]
+                if bp_id not in seen_bp_ids:
+                    seen_bp_ids.add(bp_id)
+                    nodes.append({
+                        "id": bp_id,
+                        "label": (bp.get("name") or "Bike Point").replace(
+                            ", London", ""
+                        ),
+                        "type": "BikePoint",
+                        "properties": {
+                            "lat": bp["lat"],
+                            "lon": bp["lon"],
+                            "nbBikes": bp["nbBikes"],
+                            "nbDocks": bp["nbDocks"],
+                        },
+                    })
+                relationships.append({
+                    "id": f"near-{bp_id}-{station_id}",
+                    "source": bp_id,
+                    "target": station_id,
+                    "type": "NEAR_STATION",
+                })
+
+        # NEXT_STOP relationships between consecutive stations
+        for i in range(len(station_ids) - 1):
+            relationships.append({
+                "id": f"next-{i}",
+                "source": station_ids[i],
+                "target": station_ids[i + 1],
+                "type": "NEXT_STOP",
+            })
+
+        return {"nodes": nodes, "relationships": relationships}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/bikepoints/nearby")
 async def get_nearby_bikepoints(
     lat: float = Query(...),

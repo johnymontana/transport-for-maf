@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Box, HStack, Text, Badge } from "@chakra-ui/react";
-import { getLines, getLineStations } from "@/lib/api";
+import { getLines, getLineGraph } from "@/lib/api";
 import { TFL_LINE_COLORS } from "@/lib/graphStyles";
 import { useAppStore } from "@/store/useAppStore";
-import type { GraphData } from "@/lib/types";
+import type { GraphNode } from "@/lib/types";
 
 interface LineInfo {
   lineId: string;
@@ -49,52 +49,34 @@ export function LineStatusBanner() {
         color: TFL_LINE_COLORS[line.lineId] || line.color || "#666",
       });
 
-      // Fetch stations for this line
-      const data = await getLineStations(line.lineId);
-      const stations = data.stations;
+      // Fetch full line graph (stations, zones, bike points)
+      const graphData = await getLineGraph(line.lineId);
 
-      if (stations.length === 0) return;
+      if (graphData.nodes.length === 0) return;
 
-      // Set map markers for the line's stations
+      // Set graph data directly (backend builds the full subgraph)
+      setGraphData(graphData);
+
+      // Set map markers from station nodes
+      const stationNodes = graphData.nodes.filter(
+        (n: GraphNode) => n.type === "Station"
+      );
       setMapMarkers(
-        stations.map((s) => ({
-          lat: s.lat,
-          lon: s.lon,
-          name: s.name,
+        stationNodes.map((n: GraphNode) => ({
+          lat: n.properties?.lat as number,
+          lon: n.properties?.lon as number,
+          name: n.label,
           type: "station" as const,
-          metadata: { zone: s.zone, sequence: s.sequence },
+          metadata: {
+            zone: n.properties?.zone,
+            sequence: n.properties?.sequence,
+          },
         }))
       );
 
-      // Build graph data: stations as nodes, NEXT_STOP edges between consecutive stations
-      const lineColor = TFL_LINE_COLORS[line.lineId] || line.color || "#666";
-      const graphData: GraphData = {
-        nodes: stations.map((s) => ({
-          id: s.naptanId,
-          label: s.name,
-          type: "Station",
-          properties: {
-            lat: s.lat,
-            lon: s.lon,
-            zone: s.zone,
-            sequence: s.sequence,
-            line: line.name,
-            lineColor,
-          },
-        })),
-        relationships: stations.slice(0, -1).map((s, i) => ({
-          id: `next-${i}`,
-          source: s.naptanId,
-          target: stations[i + 1].naptanId,
-          type: "NEXT_STOP",
-          properties: { line: line.name, color: lineColor },
-        })),
-      };
-      setGraphData(graphData);
-
       // Zoom map to fit the line
-      const lats = stations.map((s) => s.lat);
-      const lons = stations.map((s) => s.lon);
+      const lats = stationNodes.map((n: GraphNode) => n.properties?.lat as number);
+      const lons = stationNodes.map((n: GraphNode) => n.properties?.lon as number);
       const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
       const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
       panMapTo(centerLat, centerLon, 11);

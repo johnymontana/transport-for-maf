@@ -111,6 +111,12 @@ export async function getLineStations(
   return resp.json();
 }
 
+export async function getLineGraph(lineId: string): Promise<GraphData> {
+  const resp = await fetch(`${API_BASE}/lines/${lineId}/graph`);
+  if (!resp.ok) throw new Error("Failed to get line graph");
+  return resp.json();
+}
+
 // --- Memory endpoints ---
 
 export async function getMemoryContext(

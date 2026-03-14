@@ -45,14 +45,17 @@ export function ChatPanel() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const processToolResult = (resultStr: string) => {
+  const processToolResult = (resultData: unknown) => {
     try {
-      const result = JSON.parse(resultStr);
+      // Handle both string and already-parsed object
+      const result =
+        typeof resultData === "string" ? JSON.parse(resultData) : resultData;
+      if (!result || typeof result !== "object") return;
 
       // Update map markers from tool results
       if (result.map_markers && result.map_markers.length > 0) {
         const markers: MapMarker[] = result.map_markers;
-        setMapMarkers(markers);
+        useAppStore.getState().addMapMarkers(markers);
         // Pan to first marker
         if (markers[0]) {
           panMapTo(markers[0].lat, markers[0].lon, 14);
@@ -66,15 +69,40 @@ export function ChatPanel() {
         (result.graph_data.nodes?.length > 0 ||
           result.graph_data.relationships?.length > 0)
       ) {
-        setGraphData(result.graph_data as GraphData);
+        const existing = useAppStore.getState().graphData;
+        if (existing) {
+          // Merge with existing graph data
+          const existingNodeIds = new Set(existing.nodes.map((n) => n.id));
+          const newNodes = result.graph_data.nodes.filter(
+            (n: { id: string }) => !existingNodeIds.has(n.id)
+          );
+          setGraphData({
+            nodes: [...existing.nodes, ...newNodes],
+            relationships: [
+              ...existing.relationships,
+              ...result.graph_data.relationships,
+            ],
+          });
+        } else {
+          setGraphData(result.graph_data as GraphData);
+        }
       }
 
       // Handle route coordinates for map line
-      if (result.route) {
+      if (result.route && Array.isArray(result.route)) {
         const coords: [number, number][] = result.route.map(
           (s: { lat: number; lon: number }) => [s.lon, s.lat]
         );
         useAppStore.getState().setRouteCoordinates(coords);
+        // Zoom to fit route
+        if (result.route.length > 0) {
+          const lats = result.route.map((s: { lat: number }) => s.lat);
+          const lons = result.route.map((s: { lon: number }) => s.lon);
+          const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+          const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+          panMapTo(centerLat, centerLon, 13);
+          setMainView("map");
+        }
       }
     } catch {
       // Not JSON or doesn't have expected shape
@@ -145,7 +173,7 @@ export function ChatPanel() {
         }
 
         if (event.event === "tool_result" && data.result) {
-          processToolResult(data.result as string);
+          processToolResult(data.result);
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
@@ -210,7 +238,7 @@ export function ChatPanel() {
   const examplePrompts = [
     "Find stations near Big Ben",
     "Show me the Northern Line",
-    "Plan a route from King's Cross to Brixton",
+    "I want to go from the Tower of London to Buckingham Palace",
     "Find bike points near Waterloo",
     "Are there any disruptions?",
   ];

@@ -8,6 +8,7 @@ Creates and configures the transport assistant agent with:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import AsyncGenerator
@@ -103,7 +104,7 @@ async def run_agent_stream(
     tool_calls_for_trace = []
 
     try:
-        # Save user message
+        # Save user message (must await so it's in history for get_conversation)
         await memory.save_message("user", message)
 
         # Build conversation history from memory
@@ -147,23 +148,27 @@ async def run_agent_stream(
                         }),
                     }
 
-        # Save assistant response
+        # Save assistant response and trace asynchronously (don't block the stream)
         if full_response:
-            await memory.save_message("assistant", full_response)
+            async def _save_memory() -> None:
+                try:
+                    await memory.save_message("assistant", full_response)
+                    await record_agent_trace(
+                        memory=memory,
+                        messages=[
+                            {"role": "user", "content": message},
+                            {"role": "assistant", "content": full_response[:500]},
+                        ],
+                        task=message,
+                        tool_calls=tool_calls_for_trace,
+                        outcome="success",
+                        success=True,
+                        generate_embedding=True,
+                    )
+                except Exception:
+                    logger.exception("Error saving memory after response")
 
-            # Record reasoning trace
-            await record_agent_trace(
-                memory=memory,
-                messages=[
-                    {"role": "user", "content": message},
-                    {"role": "assistant", "content": full_response[:500]},
-                ],
-                task=message,
-                tool_calls=tool_calls_for_trace,
-                outcome="success",
-                success=True,
-                generate_embedding=True,
-            )
+            asyncio.create_task(_save_memory())
 
     except Exception as e:
         logger.exception("Error in agent stream")

@@ -238,7 +238,7 @@ export function ChatPanel() {
   const examplePrompts = [
     "Find stations near Big Ben",
     "Show me the Northern Line",
-    "I want to go from the Tower of London to Buckingham Palace",
+    "Route from Tower of London to Buckingham Palace",
     "Find bike points near Waterloo",
     "Are there any disruptions?",
   ];
@@ -266,7 +266,7 @@ export function ChatPanel() {
 
       {/* Example prompts */}
       {messages.length <= 2 && (
-        <HStack gap={2} flexWrap="wrap" px={4} pb={2}>
+        <Flex gap={2} flexWrap="wrap" px={4} pb={2}>
           {examplePrompts.map((prompt, i) => (
             <Button
               key={i}
@@ -274,11 +274,15 @@ export function ChatPanel() {
               variant="outline"
               colorPalette="blue"
               onClick={() => setInput(prompt)}
+              whiteSpace="normal"
+              textAlign="left"
+              height="auto"
+              py={1.5}
             >
               {prompt}
             </Button>
           ))}
-        </HStack>
+        </Flex>
       )}
 
       {/* Input */}

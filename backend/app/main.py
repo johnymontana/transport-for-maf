@@ -66,9 +66,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_cors_origins = settings.cors_origins.split(",")
+# Also allow common dev ports
+for port in ["3000", "3001"]:
+    origin = f"http://localhost:{port}"
+    if origin not in _cors_origins:
+        _cors_origins.append(origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(","),
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -299,6 +306,33 @@ async def get_stations(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/stations/nearby")
+async def get_nearby_stations(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    radius: int = Query(1000),
+    limit: int = Query(10),
+):
+    """Find stations near a coordinate."""
+    client = get_memory_client()
+    try:
+        result = await client.graph.execute_read(
+            """
+            WITH point({latitude: $lat, longitude: $lon}) AS location
+            MATCH (s:Station)
+            WHERE point.distance(s.location, location) < $radius
+            WITH s, round(point.distance(s.location, location)) AS distance
+            ORDER BY distance LIMIT $limit
+            RETURN s.naptanId AS naptanId, s.name AS name,
+                   s.lat AS lat, s.lon AS lon, s.zone AS zone, distance
+            """,
+            {"lat": lat, "lon": lon, "radius": radius, "limit": limit},
+        )
+        return {"stations": [dict(r) for r in result]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/stations/{naptan_id}")
 async def get_station(naptan_id: str):
     """Get station details."""
@@ -326,33 +360,6 @@ async def get_station(naptan_id: str):
         return dict(result[0])
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/stations/nearby")
-async def get_nearby_stations(
-    lat: float = Query(...),
-    lon: float = Query(...),
-    radius: int = Query(1000),
-    limit: int = Query(10),
-):
-    """Find stations near a coordinate."""
-    client = get_memory_client()
-    try:
-        result = await client.graph.execute_read(
-            """
-            WITH point({latitude: $lat, longitude: $lon}) AS location
-            MATCH (s:Station)
-            WHERE point.distance(s.location, location) < $radius
-            WITH s, round(point.distance(s.location, location)) AS distance
-            ORDER BY distance LIMIT $limit
-            RETURN s.naptanId AS naptanId, s.name AS name,
-                   s.lat AS lat, s.lon AS lon, s.zone AS zone, distance
-            """,
-            {"lat": lat, "lon": lon, "radius": radius, "limit": limit},
-        )
-        return {"stations": [dict(r) for r in result]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

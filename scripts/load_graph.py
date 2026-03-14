@@ -93,9 +93,10 @@ async def load_stations(driver) -> None:
             """
         )
 
-    result = await driver.session().run("MATCH (s:Station) RETURN count(s) AS count")
-    record = await result.single()
-    print(f"  Loaded {record['count']} stations.")
+    async with driver.session() as session:
+        result = await session.run("MATCH (s:Station) RETURN count(s) AS count")
+        record = await result.single()
+        print(f"  Loaded {record['count']} stations.")
 
 
 async def load_lines(driver) -> None:
@@ -121,22 +122,28 @@ async def load_lines(driver) -> None:
             lines=lines,
         )
 
-    # Create ON_LINE relationships from station line data
+    # Create ON_LINE relationships from station line data (batched)
     stations_file = DATA_DIR / "stations.json"
     if stations_file.exists():
         stations = json.loads(stations_file.read_text())
+        # Build flat list of {naptanId, lineId} pairs
+        pairs = []
+        for station in stations:
+            for line_ref in station.get("lines", []):
+                pairs.append({
+                    "naptanId": station["naptanId"],
+                    "lineId": line_ref["id"],
+                })
         async with driver.session() as session:
-            for station in stations:
-                for line_ref in station.get("lines", []):
-                    await session.run(
-                        """
-                        MATCH (s:Station {naptanId: $naptanId})
-                        MATCH (l:Line {lineId: $lineId})
-                        MERGE (s)-[:ON_LINE]->(l)
-                        """,
-                        naptanId=station["naptanId"],
-                        lineId=line_ref["id"],
-                    )
+            await session.run(
+                """
+                UNWIND $pairs AS p
+                MATCH (s:Station {naptanId: p.naptanId})
+                MATCH (l:Line {lineId: p.lineId})
+                MERGE (s)-[:ON_LINE]->(l)
+                """,
+                pairs=pairs,
+            )
 
     print("  Lines loaded.")
 
@@ -151,51 +158,72 @@ async def load_routes(driver) -> None:
     route_files = list(routes_dir.glob("*.json"))
     print(f"Loading routes from {len(route_files)} line files...")
 
+    # Collect all NEXT_STOP pairs and ON_LINE pairs across all lines
+    next_stop_pairs = []
+    on_line_pairs = []
+
+    for route_file in route_files:
+        route_data = json.loads(route_file.read_text())
+        line_id = route_data["lineId"]
+        line_name = route_data["lineName"]
+
+        for branch in route_data.get("sequences", []):
+            stops = branch.get("stops", branch) if isinstance(branch, dict) else branch
+
+            for i in range(len(stops) - 1):
+                next_stop_pairs.append({
+                    "fromId": stops[i]["naptanId"],
+                    "toId": stops[i + 1]["naptanId"],
+                    "lineId": line_id,
+                    "lineName": line_name,
+                    "seq": i,
+                })
+
+            for stop in stops:
+                on_line_pairs.append({
+                    "naptanId": stop["naptanId"],
+                    "lineId": line_id,
+                    "seq": stop["sequence"],
+                })
+
+    print(f"  Batch loading {len(next_stop_pairs)} NEXT_STOP and {len(on_line_pairs)} ON_LINE pairs...")
+
     async with driver.session() as session:
-        for route_file in route_files:
-            route_data = json.loads(route_file.read_text())
-            line_id = route_data["lineId"]
-            line_name = route_data["lineName"]
+        # Batch NEXT_STOP in chunks to avoid query size limits
+        chunk_size = 500
+        for i in range(0, len(next_stop_pairs), chunk_size):
+            chunk = next_stop_pairs[i : i + chunk_size]
+            await session.run(
+                """
+                UNWIND $pairs AS p
+                MATCH (a:Station {naptanId: p.fromId})
+                MATCH (b:Station {naptanId: p.toId})
+                MERGE (a)-[r:NEXT_STOP {lineId: p.lineId}]->(b)
+                SET r.lineName = p.lineName, r.sequence = p.seq
+                """,
+                pairs=chunk,
+            )
 
-            for seq_idx, sequence in enumerate(route_data.get("sequences", [])):
-                # Create NEXT_STOP chain and ON_LINE with sequence
-                for i in range(len(sequence) - 1):
-                    from_stop = sequence[i]
-                    to_stop = sequence[i + 1]
+        # Batch ON_LINE with sequence
+        for i in range(0, len(on_line_pairs), chunk_size):
+            chunk = on_line_pairs[i : i + chunk_size]
+            await session.run(
+                """
+                UNWIND $pairs AS p
+                MATCH (s:Station {naptanId: p.naptanId})
+                MATCH (l:Line {lineId: p.lineId})
+                MERGE (s)-[r:ON_LINE]->(l)
+                ON CREATE SET r.sequence = p.seq
+                """,
+                pairs=chunk,
+            )
 
-                    await session.run(
-                        """
-                        MATCH (a:Station {naptanId: $fromId})
-                        MATCH (b:Station {naptanId: $toId})
-                        MERGE (a)-[r:NEXT_STOP {lineId: $lineId}]->(b)
-                        SET r.lineName = $lineName, r.sequence = $seq
-                        """,
-                        fromId=from_stop["naptanId"],
-                        toId=to_stop["naptanId"],
-                        lineId=line_id,
-                        lineName=line_name,
-                        seq=i,
-                    )
-
-                # Set ON_LINE sequence from route order
-                for stop in sequence:
-                    await session.run(
-                        """
-                        MATCH (s:Station {naptanId: $naptanId})
-                        MATCH (l:Line {lineId: $lineId})
-                        MERGE (s)-[r:ON_LINE]->(l)
-                        ON CREATE SET r.sequence = $seq
-                        """,
-                        naptanId=stop["naptanId"],
-                        lineId=line_id,
-                        seq=stop["sequence"],
-                    )
-
-    result = await driver.session().run(
-        "MATCH ()-[r:NEXT_STOP]->() RETURN count(r) AS count"
-    )
-    record = await result.single()
-    print(f"  Created {record['count']} NEXT_STOP relationships.")
+    async with driver.session() as session:
+        result = await session.run(
+            "MATCH ()-[r:NEXT_STOP]->() RETURN count(r) AS count"
+        )
+        record = await result.single()
+        print(f"  Created {record['count']} NEXT_STOP relationships.")
 
 
 async def load_bikepoints(driver) -> None:

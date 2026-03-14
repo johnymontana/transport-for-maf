@@ -85,10 +85,23 @@ async def download_stations(client: httpx.AsyncClient) -> None:
     print(f"  Saved {len(stations)} stations to data/stations.json")
 
 
+# Parent-level stop types (not platforms, entrances, or access areas)
+PARENT_STOP_TYPES = {
+    "NaptanMetroStation",
+    "NaptanRailStation",
+    "TransportInterchange",
+}
+
+
 async def download_stations_paginated(client: httpx.AsyncClient) -> None:
-    """Download all rail stations using paginated StopPoint endpoint."""
+    """Download all rail stations using paginated StopPoint endpoint.
+
+    Filters to parent-level station types only (not platforms/entrances)
+    so naptanIds match those used in the Route Sequence API.
+    """
     print("Downloading stations (paginated)...")
     all_stations = []
+    seen_ids = set()
     page = 1
 
     while True:
@@ -106,23 +119,35 @@ async def download_stations_paginated(client: httpx.AsyncClient) -> None:
             break
 
         for stop in stop_points:
-            if isinstance(stop, dict) and "naptanId" in stop:
-                station = {
-                    "naptanId": stop["naptanId"],
-                    "commonName": stop["commonName"],
-                    "lat": stop["lat"],
-                    "lon": stop["lon"],
-                    "modes": stop.get("modes", []),
-                    "zone": _extract_zone(stop),
-                    "lines": [
-                        {"id": line["id"], "name": line["name"]}
-                        for line in stop.get("lines", [])
-                    ],
-                }
-                all_stations.append(station)
+            if not isinstance(stop, dict) or "naptanId" not in stop:
+                continue
+            # Only keep parent-level stations
+            stop_type = stop.get("stopType", "")
+            if stop_type not in PARENT_STOP_TYPES:
+                continue
+            nid = stop["naptanId"]
+            if nid in seen_ids:
+                continue
+            seen_ids.add(nid)
 
-        total_pages = data.get("totalPages", 1) if isinstance(data, dict) else 1
-        print(f"  Page {page}/{total_pages} - {len(stop_points)} stops")
+            station = {
+                "naptanId": nid,
+                "commonName": stop["commonName"],
+                "lat": stop["lat"],
+                "lon": stop["lon"],
+                "modes": stop.get("modes", []),
+                "zone": _extract_zone(stop),
+                "lines": [
+                    {"id": line["id"], "name": line["name"]}
+                    for line in stop.get("lines", [])
+                ],
+            }
+            all_stations.append(station)
+
+        total = data.get("total", 0) if isinstance(data, dict) else 0
+        page_size = data.get("pageSize", 1000) if isinstance(data, dict) else 1000
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+        print(f"  Page {page}/{total_pages} - {len(stop_points)} stops ({len(all_stations)} parent stations)")
         if page >= total_pages:
             break
         page += 1
@@ -191,21 +216,25 @@ async def download_routes(client: httpx.AsyncClient) -> None:
             resp.raise_for_status()
             data = resp.json()
 
-            # Extract station sequences
+            # Extract station sequences from stopPointSequences
             sequences = []
-            for seq in data.get("orderedLineRoutes", data.get("stopPointSequences", [])):
+            for seq in data.get("stopPointSequences", []):
                 stop_points = seq.get("stopPoint", [])
+                branch_id = seq.get("branchId", 0)
                 sequence = []
                 for i, sp in enumerate(stop_points):
                     sequence.append({
-                        "naptanId": sp.get("id", sp.get("stationId", "")),
+                        "naptanId": sp.get("stationId", sp.get("id", "")),
                         "name": sp.get("name", ""),
                         "lat": sp.get("lat", 0),
                         "lon": sp.get("lon", 0),
                         "sequence": i,
                     })
                 if sequence:
-                    sequences.append(sequence)
+                    sequences.append({
+                        "branchId": branch_id,
+                        "stops": sequence,
+                    })
 
             route_data = {
                 "lineId": line_id,

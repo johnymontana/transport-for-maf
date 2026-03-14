@@ -60,10 +60,14 @@ The full backend is implemented and functional.
 **Agent** (`backend/app/agent.py`):
 - MAF agent with system prompt covering London transport domain knowledge
 - Combines memory tools (from `create_memory_tools()`) + transport tools + context provider
-- `run_agent_stream()` yields SSE events (token, tool_call, tool_result, done, error) and records reasoning traces via `record_agent_trace()`
+- `run_agent_stream()` retrieves full conversation history via `memory.get_conversation()` and passes all messages to `agent.run()` for multi-turn context
+- Yields SSE events (token, tool_call, tool_result, done, error)
+- Post-response memory operations (save assistant message + record reasoning trace) run asynchronously via `asyncio.create_task()` to avoid blocking the stream
+- Entity extraction configured with `ExtractorType.LLM` (OpenAI) instead of spaCy/GLiNER pipeline
 
 **FastAPI server** (`backend/app/main.py`):
-- 14 endpoints: SSE streaming chat, sync chat, health check, stations (list/detail/nearby), lines (list/stations), bikepoints/nearby, graph/neighborhood expansion, disruptions, memory context/graph/preferences
+- 15 endpoints: SSE streaming chat, sync chat, health check, stations (list/detail/nearby), lines (list/stations/graph), bikepoints/nearby, graph/neighborhood expansion, disruptions, memory context/graph/preferences
+- `GET /lines/{id}/graph` returns full line subgraph with Station, Zone, and BikePoint nodes plus NEXT_STOP, IN_ZONE, and NEAR_STATION relationships
 - CORS middleware, session management, lifespan management
 
 ---
@@ -76,12 +80,12 @@ The full frontend is implemented with all planned components.
 - Next.js 14, React 18, TypeScript, Chakra UI v3, Neo4j NVL, react-map-gl (Mapbox GL JS), Zustand, react-markdown
 
 **Components:**
-- `ChatPanel` - SSE streaming chat with tool call badges, suggestion chips, session management. Parses `graph_data` and `map_markers` from tool results to update the store.
+- `ChatPanel` - SSE streaming chat with tool call badges, example prompt chips, session management. Parses `graph_data`, `map_markers`, and `route` from tool results. Merges graph data from multiple tool calls, accumulates map markers, and auto-zooms to routes.
 - `TransportMap` - Mapbox GL map with station markers (sized by zone), dynamic markers from agent responses, GeoJSON route line rendering, flyTo on store changes
-- `TransportGraphView` - Neo4j NVL graph with node coloring by type, click-to-select-station + pan-map, double-click-to-expand via API. Uses dynamic import (no SSR).
+- `TransportGraphView` - Neo4j NVL graph with `d3Force` layout, zoom/pan/drag, click-to-inspect properties panel, click-to-select-station + pan-map, double-click-to-expand via API. Uses `useState`-based dynamic import pattern for reliable NVL initialization.
 - `MemoryGraphView` - NVL visualization of conversation entities and relationships from the memory graph
 - `DetailPanel` - Context-sensitive right sidebar showing station details (lines, bike points, interchanges) or preferences
-- `LineStatusBanner` - Line status badges at the top of the layout
+- `LineStatusBanner` - Clickable line badges at the top of the layout. Clicking a line fetches its full network graph (stations, zones, bike points) via `GET /lines/{id}/graph` and populates both map markers and transport graph. Clicking again deselects. Selected line highlighted with white outline.
 
 **Shared state** (`useAppStore.ts`):
 - Zustand store with selectedStation, selectedLine, mapCenter/Zoom, mapMarkers, routeCoordinates, graphData, mainView, and actions
@@ -98,7 +102,17 @@ The full frontend is implemented with all planned components.
   - Agent tool results dispatch `graph_data` and `map_markers` to the store
   - Graph node click pans the map to the station location
   - Map marker click updates the detail panel
-- Line status banner component
+  - Multiple tool results merge graph data and accumulate markers
+  - Route results auto-zoom map to fit route bounds
+- Interactive line network exploration via `LineStatusBanner`:
+  - Click a line badge to load its full subgraph (stations, zones, bike points) into map + graph
+  - `GET /lines/{id}/graph` backend endpoint returns ready-to-render graph data
+  - Click again to deselect; selected line highlighted with white outline
+- Full conversation history passed to agent for multi-turn context (`memory.get_conversation()`)
+- Async post-response memory saving (fire-and-forget `asyncio.create_task`)
+- LLM-based entity extraction (replaced spaCy/GLiNER pipeline with `ExtractorType.LLM`)
+- Bounded `shortestPath` queries (`*..50`) to eliminate Neo4j performance warnings
+- Transport graph improvements: d3Force layout, zoom/pan/drag, properties panel, node expansion, legend
 - README.md with architecture, setup guide, API reference, and testing docs
 - CLAUDE.md with codebase context for AI-assisted development
 

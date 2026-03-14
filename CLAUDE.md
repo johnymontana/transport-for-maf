@@ -70,6 +70,7 @@ frontend/
     components/graph/TransportGraphView.tsx  # NVL graph viz (dynamic import, no SSR)
     components/graph/MemoryGraphView.tsx     # Memory entity graph
     components/detail/DetailPanel.tsx        # Right sidebar
+    components/LineStatusBanner.tsx          # Clickable line badges (loads line graph)
     lib/api.ts        # API client (streamChat SSE generator, REST calls)
     lib/types.ts      # TypeScript interfaces
     lib/graphStyles.ts # TFL_LINE_COLORS, node styling
@@ -104,6 +105,14 @@ The agent uses `neo4j-agent-memory` with three memory types:
 
 Memory tools are created by `create_memory_tools(memory)` from `neo4j_agent_memory.integrations.microsoft_agent`.
 
+Key implementation details:
+- **Conversation history**: `run_agent_stream()` retrieves full conversation history via `memory.get_conversation(limit=20)` and passes all messages to `agent.run()` for proper multi-turn context.
+- **Async memory saving**: Post-response memory operations (saving assistant message + reasoning trace) run as fire-and-forget `asyncio.create_task()` to avoid blocking the SSE stream.
+- **Entity extraction**: Configured with `ExtractionConfig(extractor_type=ExtractorType.LLM)` in `memory_setup.py` to use OpenAI for extraction (spaCy/GLiNER not installed).
+
+### Line network graph endpoint
+`GET /lines/{id}/graph` returns the full subgraph for a line in a single Cypher query: Station nodes (ordered by sequence), Zone nodes with IN_ZONE relationships, BikePoint nodes with NEAR_STATION relationships, and NEXT_STOP edges between consecutive stations. The frontend `LineStatusBanner` calls this when a line badge is clicked, populating both the map and graph views.
+
 ### Config gotcha
 `backend/app/config.py` evaluates `os.getenv()` at class definition time (module import), not at Settings instantiation. Tests that need to override defaults must reload the module with `importlib` after patching the environment. They must also patch `dotenv.load_dotenv` to prevent the `.env` file from overriding test values.
 
@@ -111,7 +120,10 @@ Memory tools are created by `create_memory_tools(memory)` from `neo4j_agent_memo
 Stations and bike points have `location: point({latitude, longitude})` properties with `POINT INDEX` for fast spatial lookups. Queries use `point.distance(node.location, referencePoint) < radius`.
 
 ### Frontend graph visualization
-`TransportGraphView.tsx` and `MemoryGraphView.tsx` use dynamic imports (`next/dynamic` with `ssr: false`) because Neo4j NVL requires browser APIs.
+`TransportGraphView.tsx` uses a `useState`-based dynamic import pattern (not `next/dynamic`) for reliable NVL initialization. A separate `NvlGraph` sub-component dynamically imports `@neo4j-nvl/react`'s `InteractiveNvlWrapper` in a `useEffect`, then renders it with `d3Force` layout and `mouseEventCallbacks` for zoom/pan/drag/click. `MemoryGraphView.tsx` follows a similar pattern.
+
+### ChatPanel tool result processing
+`processToolResult()` in `ChatPanel.tsx` handles both string and already-parsed object results from SSE events. It merges graph data from multiple tool calls (deduplicating nodes by ID), accumulates map markers via `addMapMarkers()`, and auto-zooms the map to fit route coordinates when a `route` key is present.
 
 ## Testing Conventions
 

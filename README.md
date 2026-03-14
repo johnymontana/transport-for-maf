@@ -1,6 +1,8 @@
-# TfL Explorer
+# Transport for MAF
 
 A conversational London transport assistant powered by the Microsoft Agent Framework (MAF), Neo4j Agent Memory, and Transport for London data. Features a three-panel interface with chat, interactive map, and graph visualization.
+
+![Transport for MAF screenshot](img/transport-for-maf.png)
 
 ## Architecture
 
@@ -27,7 +29,7 @@ Frontend (Next.js + Chakra UI)     Backend (FastAPI + MAF Agent)      Database (
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) (for Neo4j)
+- [Neo4j](https://console.neo4j.io/) (Neo4j Aura free tier or any other Neo4j instance)
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
 - [Node.js](https://nodejs.org/) 18+ and npm
 - [OpenAI API key](https://platform.openai.com/api-keys)
@@ -115,7 +117,7 @@ transport-for-maf/
         graph/TransportGraphView.tsx # Neo4j NVL transport graph
         graph/MemoryGraphView.tsx    # Neo4j NVL memory graph
         detail/DetailPanel.tsx       # Station/line detail sidebar
-        LineStatusBanner.tsx         # Line status ticker
+        LineStatusBanner.tsx         # Clickable line badges (loads line network into map + graph)
       lib/
         api.ts              # Backend API client
         types.ts            # TypeScript interfaces
@@ -179,6 +181,7 @@ Spatial indexes enable sub-millisecond geospatial queries using `point.distance(
 | GET | `/stations/nearby?lat=&lon=&radius=` | Spatial station search |
 | GET | `/lines` | All lines with colors |
 | GET | `/lines/{id}/stations` | Stations on a line |
+| GET | `/lines/{id}/graph` | Full line subgraph (stations, zones, bike points) |
 | GET | `/bikepoints/nearby?lat=&lon=` | Nearby bike points |
 | GET | `/graph/neighborhood/{id}` | Graph node expansion |
 | GET | `/disruptions` | Live disruptions |
@@ -229,9 +232,11 @@ make clean              # Remove generated files
 
 The agent uses three types of memory via neo4j-agent-memory:
 
-- **Short-term**: Conversation messages within a session
-- **Long-term**: Entities extracted from conversations (stations, lines mentioned) and user preferences (e.g., "I prefer step-free access")
+- **Short-term**: Conversation messages within a session (full history passed to agent for multi-turn context)
+- **Long-term**: Entities extracted from conversations (stations, lines mentioned) and user preferences (e.g., "I prefer step-free access"). Entity extraction uses LLM-based extraction via OpenAI.
 - **Reasoning traces**: Records of tool calls and outcomes for similar-task retrieval
+
+Memory operations after response generation (saving assistant messages and reasoning traces) run asynchronously to avoid blocking the SSE stream.
 
 Memory persists across sessions in Neo4j and is visualized in the Memory Graph tab.
 

@@ -106,12 +106,18 @@ async def run_agent_stream(
         # Save user message
         await memory.save_message("user", message)
 
-        # Create user message
-        user_msg = Message("user", [message])
+        # Build conversation history from memory
+        # get_conversation returns agent_framework Message objects
+        history = await memory.get_conversation(limit=20)
+
+        # If history is empty or doesn't end with the current message,
+        # fall back to just the current message
+        if not history:
+            history = [Message("user", [message])]
 
         # Stream agent response
         full_response = ""
-        async for update in agent.run(user_msg, stream=True):
+        async for update in agent.run(history, stream=True):
             if update.text:
                 full_response += update.text
                 yield {

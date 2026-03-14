@@ -143,7 +143,7 @@ export function DetailPanel() {
                   {stationDetails.bikePoints.slice(0, 5).map((bp, i) => (
                     <HStack key={i} justify="space-between" fontSize="xs" mb={0.5}>
                       <Text lineClamp={1} maxW="60%">
-                        {bp.name.replace(/^.+, /, "")}
+                        {(bp.name || "Unknown").replace(/^.+, /, "")}
                       </Text>
                       <HStack gap={1}>
                         <Badge colorPalette="green" size="sm">

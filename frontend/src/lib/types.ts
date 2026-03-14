@@ -59,6 +59,7 @@ export interface GraphRelationship {
   source: string;
   target: string;
   type: string;
+  properties?: Record<string, unknown>;
 }
 
 export interface GraphData {

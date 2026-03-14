@@ -251,7 +251,7 @@ def get_transport_tools(
         MATCH (end:Station)
         WHERE toLower(end.name) CONTAINS toLower($to)
         WITH start, end LIMIT 1
-        MATCH path = shortestPath((start)-[:NEXT_STOP*]-(end))
+        MATCH path = shortestPath((start)-[:NEXT_STOP*..50]-(end))
         WITH path, nodes(path) AS stops, relationships(path) AS rels
         UNWIND range(0, size(stops)-1) AS i
         WITH path, stops[i] AS stop, i

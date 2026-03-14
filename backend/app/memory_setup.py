@@ -7,6 +7,7 @@ import logging
 from pydantic import SecretStr
 
 from neo4j_agent_memory import MemoryClient, MemorySettings
+from neo4j_agent_memory.config.settings import ExtractionConfig, ExtractorType
 from neo4j_agent_memory.integrations.microsoft_agent import Neo4jMicrosoftMemory
 
 from .config import settings
@@ -32,6 +33,9 @@ def get_memory_settings() -> MemorySettings:
                 SecretStr(settings.openai_api_key) if settings.openai_api_key else None
             ),
         },
+        extraction=ExtractionConfig(
+            extractor_type=ExtractorType.LLM,
+        ),
     )
 
 

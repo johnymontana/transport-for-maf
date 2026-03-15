@@ -11,7 +11,7 @@ interface LineInfo {
   lineId: string;
   name: string;
   color: string;
-  stationCount: number;
+  stationCount?: number;
 }
 
 export function LineStatusBanner() {

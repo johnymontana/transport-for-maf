@@ -3,6 +3,7 @@ import type { GraphData, Line, MapMarker, Station } from "@/lib/types";
 import { v4 as uuid } from "uuid";
 
 export type MainView = "map" | "graph" | "memory";
+export type MobilePanel = "chat" | "main" | "detail";
 
 interface AppState {
   // Session
@@ -23,6 +24,7 @@ interface AppState {
 
   // View
   mainView: MainView;
+  mobilePanel: MobilePanel;
 
   // Actions
   setSelectedStation: (station: Station | null) => void;
@@ -33,6 +35,7 @@ interface AppState {
   setRouteCoordinates: (coords: [number, number][] | null) => void;
   setGraphData: (data: GraphData | null) => void;
   setMainView: (view: MainView) => void;
+  setMobilePanel: (panel: MobilePanel) => void;
   clearSelection: () => void;
 }
 
@@ -47,6 +50,7 @@ export const useAppStore = create<AppState>((set) => ({
   routeCoordinates: null,
   graphData: null,
   mainView: "map",
+  mobilePanel: "main",
 
   // Actions
   setSelectedStation: (station) =>
@@ -79,6 +83,8 @@ export const useAppStore = create<AppState>((set) => ({
   setGraphData: (data) => set({ graphData: data }),
 
   setMainView: (view) => set({ mainView: view }),
+
+  setMobilePanel: (panel) => set({ mobilePanel: panel }),
 
   clearSelection: () =>
     set({

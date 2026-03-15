@@ -244,7 +244,7 @@ export function ChatPanel() {
   ];
 
   return (
-    <Flex direction="column" h="100%" bg="gray.50" borderRight="1px solid" borderColor="gray.200">
+    <Flex direction="column" h="100%" bg="gray.50" borderRight={{ base: "none", lg: "1px solid" }} borderColor="gray.200">
       <Box p={4} borderBottom="1px solid" borderColor="gray.200" bg="white">
         <Heading size="md" color="blue.700">
           TfL Explorer

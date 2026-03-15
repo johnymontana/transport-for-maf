@@ -2,7 +2,7 @@
  * API client for the TfL Explorer backend.
  */
 
-import type { GraphData, Line, MapMarker, MemoryContext, Station } from "./types";
+import type { GraphData, GraphNode, GraphRelationship, Line, MapMarker, MemoryContext, Station } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -156,9 +156,9 @@ export async function getPreferences(
 // --- Graph endpoints ---
 
 export async function getGraphNeighborhood(nodeId: string): Promise<{
-  center: Record<string, unknown>;
-  nodes: Array<Record<string, unknown>>;
-  relationships: Array<Record<string, unknown>>;
+  center: GraphNode;
+  nodes: GraphNode[];
+  relationships: GraphRelationship[];
 }> {
   const resp = await fetch(`${API_BASE}/graph/neighborhood/${nodeId}`);
   if (!resp.ok) throw new Error("Failed to get graph neighborhood");

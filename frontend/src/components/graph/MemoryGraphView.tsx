@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useAppStore } from "@/store/useAppStore";
 import { getMemoryGraph } from "@/lib/api";
 import { NODE_COLORS } from "@/lib/graphStyles";
+import type { GraphData } from "@/lib/types";
 
 const InteractiveNvlWrapper = dynamic(
   () =>
@@ -15,10 +16,7 @@ const InteractiveNvlWrapper = dynamic(
 
 export function MemoryGraphView() {
   const { sessionId } = useAppStore();
-  const [memoryData, setMemoryData] = useState<{
-    nodes: Array<Record<string, unknown>>;
-    relationships: Array<Record<string, unknown>>;
-  } | null>(null);
+  const [memoryData, setMemoryData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -71,7 +69,7 @@ export function MemoryGraphView() {
         nodes={nvlNodes}
         rels={nvlRels}
         nvlOptions={{
-          layout: "force-directed",
+          layout: "forceDirected",
           relationshipThreshold: 0.55,
         }}
         interactionOptions={{

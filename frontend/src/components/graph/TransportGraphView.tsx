@@ -126,15 +126,15 @@ export function TransportGraphView() {
         const neighborhood = await getGraphNeighborhood(node.id);
 
         const existingNodeIds = new Set(graphData.nodes.map((n) => n.id));
-        const newNodes = (neighborhood.nodes as GraphNode[]).filter(
+        const newNodes = neighborhood.nodes.filter(
           (n) => !existingNodeIds.has(n.id)
         );
 
         const existingRelIds = new Set(
           graphData.relationships.map((r, i) => r.id || `rel-${i}`)
         );
-        const newRels = (neighborhood.relationships as GraphRelationship[]).filter(
-          (r) => !existingRelIds.has(r.id)
+        const newRels = neighborhood.relationships.filter(
+          (r) => !existingRelIds.has(r.id || "")
         );
 
         useAppStore.getState().setGraphData({

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -106,13 +107,17 @@ class TestSystemPrompt:
 
 @pytest.mark.unit
 class TestRunAgentStream:
-    """Test agent streaming function."""
+    """Test agent streaming function.
+
+    In v0.1.0, message saving is handled by the context provider's after_run()
+    hook. run_agent_stream() only passes the current message to agent.run()
+    and records reasoning traces asynchronously.
+    """
 
     @pytest.mark.asyncio
     async def test_stream_yields_token_events(self):
         """Should yield token events from agent text responses."""
-        mock_memory = AsyncMock()
-        mock_memory.save_message = AsyncMock()
+        mock_memory = MagicMock()
 
         class MockUpdate:
             def __init__(self, text=None, contents=None):
@@ -139,9 +144,9 @@ class TestRunAgentStream:
         assert json.loads(token_events[1]["data"])["content"] == "London!"
 
     @pytest.mark.asyncio
-    async def test_stream_saves_messages(self):
-        """Should save user and assistant messages to memory."""
-        mock_memory = AsyncMock()
+    async def test_stream_does_not_save_messages_manually(self):
+        """Messages should NOT be saved manually — the context provider handles it."""
+        mock_memory = MagicMock()
         mock_memory.save_message = AsyncMock()
 
         class MockUpdate:
@@ -161,17 +166,48 @@ class TestRunAgentStream:
             async for _ in run_agent_stream(mock_agent, "Hello", mock_memory):
                 pass
 
-        calls = mock_memory.save_message.call_args_list
-        assert calls[0].args == ("user", "Hello")
-        assert calls[1].args == ("assistant", "Response")
+        mock_memory.save_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stream_passes_only_current_message(self):
+        """Should pass only the current user message to agent.run()."""
+        mock_memory = MagicMock()
+        run_calls = []
+
+        class MockUpdate:
+            def __init__(self, text=None, contents=None):
+                self.text = text
+                self.contents = contents or []
+
+        async def mock_run(messages, stream=True):
+            run_calls.append(messages)
+            yield MockUpdate(text="OK")
+
+        mock_agent = MagicMock()
+        mock_agent.run = mock_run
+
+        with patch("app.agent.record_agent_trace", new_callable=AsyncMock):
+            from app.agent import run_agent_stream
+
+            async for _ in run_agent_stream(mock_agent, "Find route", mock_memory):
+                pass
+
+        assert len(run_calls) == 1
+        messages = run_calls[0]
+        assert len(messages) == 1
+        assert messages[0].role == "user"
 
     @pytest.mark.asyncio
     async def test_stream_handles_errors(self):
         """Should yield error event on exception."""
-        mock_memory = AsyncMock()
-        mock_memory.save_message = AsyncMock(side_effect=Exception("DB down"))
+        mock_memory = MagicMock()
+
+        async def mock_run(messages, stream=True):
+            raise Exception("Agent failed")
+            yield  # make it an async generator
 
         mock_agent = MagicMock()
+        mock_agent.run = mock_run
 
         from app.agent import run_agent_stream
 
@@ -181,13 +217,12 @@ class TestRunAgentStream:
 
         error_events = [e for e in events if e["event"] == "error"]
         assert len(error_events) == 1
-        assert "DB down" in json.loads(error_events[0]["data"])["error"]
+        assert "Agent failed" in json.loads(error_events[0]["data"])["error"]
 
     @pytest.mark.asyncio
     async def test_stream_records_reasoning_trace(self):
-        """Should call record_agent_trace after successful completion."""
-        mock_memory = AsyncMock()
-        mock_memory.save_message = AsyncMock()
+        """Should fire-and-forget record_agent_trace after successful stream."""
+        mock_memory = MagicMock()
 
         class MockUpdate:
             def __init__(self, text=None, contents=None):
@@ -206,6 +241,9 @@ class TestRunAgentStream:
             async for _ in run_agent_stream(mock_agent, "Plan route", mock_memory):
                 pass
 
+            # Let the fire-and-forget task run
+            await asyncio.sleep(0.1)
+
             mock_trace.assert_awaited_once()
             call_kwargs = mock_trace.call_args[1]
             assert call_kwargs["task"] == "Plan route"
@@ -214,8 +252,7 @@ class TestRunAgentStream:
     @pytest.mark.asyncio
     async def test_stream_handles_tool_calls(self):
         """Should yield tool_call and tool_result events."""
-        mock_memory = AsyncMock()
-        mock_memory.save_message = AsyncMock()
+        mock_memory = MagicMock()
 
         class MockContent:
             def __init__(self, ctype, **kwargs):

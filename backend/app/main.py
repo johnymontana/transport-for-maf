@@ -99,6 +99,40 @@ class ChatResponse(BaseModel):
 # --- Helpers ---
 
 
+def _sanitize_properties(props: dict) -> dict:
+    """Convert Neo4j types to JSON-serializable values."""
+    sanitized = {}
+    for key, value in props.items():
+        if value is None or isinstance(value, (str, int, float, bool)):
+            sanitized[key] = value
+        elif isinstance(value, list):
+            sanitized[key] = [
+                str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                for v in value
+            ]
+        elif hasattr(value, "isoformat"):
+            sanitized[key] = value.isoformat()
+        else:
+            try:
+                sanitized[key] = str(value)
+            except Exception:
+                continue
+    return sanitized
+
+
+def _get_node_label(properties: dict, labels: list[str]) -> str:
+    """Derive a display label for a memory graph node."""
+    return (
+        properties.get("name")
+        or properties.get("title")
+        or (properties.get("session_id", "") or "")[:20]
+        or (properties.get("content", "") or "")[:50]
+        or (properties.get("task", "") or "")[:50]
+        or properties.get("role")
+        or (labels[0] if labels else "Unknown")
+    )
+
+
 def get_or_create_session(session_id: str | None, user_id: str | None = None) -> str:
     sid = session_id or str(uuid4())
     if sid not in sessions:
@@ -227,11 +261,9 @@ async def get_memory_graph(
         nodes = [
             {
                 "id": node.id,
-                "label": node.properties.get("name")
-                or node.properties.get("content", "")[:50]
-                or node.properties.get("role", "Unknown"),
+                "label": _get_node_label(node.properties, node.labels),
                 "type": node.labels[0] if node.labels else "Unknown",
-                "properties": node.properties,
+                "properties": _sanitize_properties(node.properties),
             }
             for node in graph.nodes
         ]

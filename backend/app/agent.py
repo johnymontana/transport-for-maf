@@ -104,25 +104,20 @@ async def run_agent_stream(
     """Run the agent and stream responses.
 
     Yields SSE events: token, tool_call, tool_result, done, error.
+
+    Message persistence is handled by the context provider's lifecycle hooks:
+    - before_run(): loads conversation history and injects it as context
+    - after_run(): saves input + response messages and triggers entity extraction
+
+    We only need to record reasoning traces here (not managed by the provider).
     """
     tool_calls_for_trace = []
 
     try:
-        # Save user message (must await so it's in history for get_conversation)
-        await memory.save_message("user", message)
-
-        # Build conversation history from memory
-        # get_conversation returns agent_framework Message objects
-        history = await memory.get_conversation(limit=20)
-
-        # If history is empty or doesn't end with the current message,
-        # fall back to just the current message
-        if not history:
-            history = [Message("user", [message])]
-
-        # Stream agent response
+        # Pass only the current message — the context provider's before_run()
+        # injects prior conversation history automatically
         full_response = ""
-        async for update in agent.run(history, stream=True):
+        async for update in agent.run([Message("user", [message])], stream=True):
             if update.text:
                 full_response += update.text
                 yield {
@@ -152,11 +147,10 @@ async def run_agent_stream(
                         }),
                     }
 
-        # Save assistant response and trace asynchronously (don't block the stream)
+        # Record reasoning trace asynchronously (not managed by context provider)
         if full_response:
-            async def _save_memory() -> None:
+            async def _record_trace() -> None:
                 try:
-                    await memory.save_message("assistant", full_response)
                     await record_agent_trace(
                         memory=memory,
                         messages=[
@@ -170,9 +164,9 @@ async def run_agent_stream(
                         generate_embedding=True,
                     )
                 except Exception:
-                    logger.exception("Error saving memory after response")
+                    logger.exception("Error recording reasoning trace")
 
-            asyncio.create_task(_save_memory())
+            asyncio.create_task(_record_trace())
 
     except Exception as e:
         logger.exception("Error in agent stream")

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Box, Text, Spinner } from "@chakra-ui/react";
+import { Box, Text, Spinner, Button, HStack } from "@chakra-ui/react";
 import dynamic from "next/dynamic";
 import { useAppStore } from "@/store/useAppStore";
-import { getMemoryGraph } from "@/lib/api";
+import { getMemoryGraph, getMemoryLocations } from "@/lib/api";
 import { NODE_COLORS } from "@/lib/graphStyles";
 import type { GraphData } from "@/lib/types";
 
@@ -15,17 +15,33 @@ const InteractiveNvlWrapper = dynamic(
 );
 
 export function MemoryGraphView() {
-  const { sessionId } = useAppStore();
+  const { sessionId, setMemoryLocations, setMainView } = useAppStore();
   const [memoryData, setMemoryData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const refreshMemoryGraph = () => {
     setLoading(true);
     getMemoryGraph(sessionId)
       .then(setMemoryData)
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    refreshMemoryGraph();
   }, [sessionId]);
+
+  const handleShowOnMap = async () => {
+    try {
+      const data = await getMemoryLocations(sessionId);
+      if (data.locations.length > 0) {
+        setMemoryLocations(data.locations);
+        setMainView("map");
+      }
+    } catch (err) {
+      console.error("Failed to load memory locations:", err);
+    }
+  };
 
   const nvlNodes = useMemo(() => {
     if (!memoryData?.nodes) return [];
@@ -64,7 +80,15 @@ export function MemoryGraphView() {
   }
 
   return (
-    <Box w="100%" h="100%">
+    <Box w="100%" h="100%" position="relative">
+      <HStack position="absolute" top={2} right={2} zIndex={10} gap={2}>
+        <Button size="xs" variant="outline" onClick={handleShowOnMap}>
+          Show locations on map
+        </Button>
+        <Button size="xs" variant="outline" onClick={refreshMemoryGraph}>
+          Refresh
+        </Button>
+      </HStack>
       <InteractiveNvlWrapper
         nodes={nvlNodes}
         rels={nvlRels}

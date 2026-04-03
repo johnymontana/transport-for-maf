@@ -7,8 +7,21 @@ import logging
 from pydantic import SecretStr
 
 from neo4j_agent_memory import MemoryClient, MemorySettings
-from neo4j_agent_memory.config.settings import ExtractionConfig, ExtractorType
-from neo4j_agent_memory.integrations.microsoft_agent import Neo4jMicrosoftMemory
+from neo4j_agent_memory.config.settings import (
+    EnrichmentConfig,
+    ExtractionConfig,
+    ExtractorType,
+    GeocodingConfig,
+    ResolutionConfig,
+    SchemaConfig,
+)
+from neo4j_agent_memory.integrations.microsoft_agent import (
+    Neo4jMicrosoftMemory,
+)
+from neo4j_agent_memory.integrations.microsoft_agent.gds import (
+    GDSAlgorithm,
+    GDSConfig,
+)
 
 from .config import settings
 
@@ -35,6 +48,28 @@ def get_memory_settings() -> MemorySettings:
         },
         extraction=ExtractionConfig(
             extractor_type=ExtractorType.LLM,
+        ),
+        # POLE+O entity schema: Location for stations, Organization for TfL,
+        # Event for disruptions, Person for users
+        schema_config=SchemaConfig(
+            enable_subtypes=True,
+        ),
+        # Entity deduplication: handles "King's Cross" vs "Kings Cross St Pancras"
+        resolution=ResolutionConfig(
+            strategy="composite",
+            fuzzy_threshold=0.85,
+            semantic_threshold=0.8,
+        ),
+        # Geocoding for location entities (free Nominatim provider)
+        geocoding=GeocodingConfig(
+            enabled=True,
+            provider="nominatim",
+            user_agent="tfl-explorer",
+        ),
+        # Wikipedia enrichment for entities like "King's Cross"
+        enrichment=EnrichmentConfig(
+            enabled=True,
+            background_enabled=True,
         ),
     )
 
@@ -80,4 +115,14 @@ async def create_memory(
         max_recent_messages=10,
         extract_entities=True,
         extract_entities_async=True,
+        gds_config=GDSConfig(
+            enabled=True,
+            fallback_to_basic=True,
+            use_pagerank_for_ranking=True,
+            expose_as_tools=[
+                GDSAlgorithm.SHORTEST_PATH,
+                GDSAlgorithm.NODE_SIMILARITY,
+                GDSAlgorithm.PAGERANK,
+            ],
+        ),
     )

@@ -47,6 +47,10 @@ Key behaviors:
 - When users want directions, use find_route to find the shortest path.
 - When users ask about a line, use get_line_stations to show all stations.
 - Remember user preferences (preferred lines, home station, accessibility needs) using memory tools.
+- Use remember_fact to store important knowledge as subject-predicate-object triples (e.g., "user" "lives near" "Waterloo").
+- Use find_connection_path to discover how entities the user has discussed are connected in the knowledge graph.
+- Use find_similar_items to find entities similar to ones the user mentions.
+- Use find_important_entities to identify the most frequently discussed or central topics.
 - Reference past conversations naturally when relevant.
 
 Response format:
@@ -74,8 +78,8 @@ async def create_agent(
     """Create a transport assistant agent with Neo4j memory."""
     chat_client = get_chat_client()
 
-    # Memory tools (search, remember preference, recall, knowledge, facts, traces)
-    memory_tools = create_memory_tools(memory, include_gds_tools=False)
+    # Memory tools (search, preferences, knowledge, facts, traces, GDS graph algorithms)
+    memory_tools = create_memory_tools(memory, include_gds_tools=True)
 
     # Transport tools (spatial queries, routes, live status)
     transport_tools = get_transport_tools(memory, tfl_client=tfl_client)

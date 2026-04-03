@@ -60,11 +60,19 @@ class MockMemoryClient:
         )
         self.short_term.search_messages = AsyncMock(return_value=[])
         self.short_term.add_message = AsyncMock()
+        self.short_term.list_sessions = AsyncMock(return_value=[])
+        self.short_term.clear_session = AsyncMock()
         self.long_term.search_entities = AsyncMock(return_value=[])
         self.long_term.search_preferences = AsyncMock(return_value=[])
         self.long_term.add_preference = AsyncMock()
         self.long_term.add_fact = AsyncMock()
         self.reasoning.get_similar_traces = AsyncMock(return_value=[])
+
+        # Memory graph export API (v0.1.0)
+        self.get_graph = AsyncMock(
+            return_value=MagicMock(nodes=[], relationships=[], metadata={})
+        )
+        self.get_locations = AsyncMock(return_value=[])
 
     async def connect(self):
         pass
@@ -100,6 +108,9 @@ class MockMemory:
 
     async def get_similar_traces(self, task, limit=5):
         return []
+
+    async def clear_session(self):
+        pass
 
 
 # ---------------------------------------------------------------------------

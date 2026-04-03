@@ -219,37 +219,32 @@ async def get_memory_context(
 async def get_memory_graph(
     session_id: str = Query(...),
 ):
-    """Get memory graph for NVL visualization."""
+    """Get memory graph for NVL visualization using the get_graph() API."""
     client = get_memory_client()
     try:
-        query = """
-        MATCH (m:Message {session_id: $session_id})-[:MENTIONS]->(e:Entity)
-        WITH e, count(m) AS mentions
-        ORDER BY mentions DESC LIMIT 20
-        OPTIONAL MATCH (e)-[r]-(related:Entity)
-        WITH collect(DISTINCT e) + collect(DISTINCT related) AS allNodes,
-             collect(DISTINCT r) AS allRels
-        RETURN [n IN allNodes WHERE n IS NOT NULL | {
-            id: elementId(n),
-            label: coalesce(n.name, 'Unknown'),
-            type: labels(n)[0],
-            properties: properties(n)
-        }] AS nodes,
-        [r IN allRels WHERE r IS NOT NULL | {
-            id: elementId(r),
-            source: elementId(startNode(r)),
-            target: elementId(endNode(r)),
-            type: type(r)
-        }] AS relationships
-        """
-        result = await client.graph.execute_read(query, {"session_id": session_id})
-        if not result:
-            return {"nodes": [], "relationships": []}
-        record = result[0]
-        return {
-            "nodes": record.get("nodes", []),
-            "relationships": record.get("relationships", []),
-        }
+        graph = await client.get_graph(session_id=session_id)
+        # Transform MemoryGraph to frontend-expected format
+        nodes = [
+            {
+                "id": node.id,
+                "label": node.properties.get("name")
+                or node.properties.get("content", "")[:50]
+                or node.properties.get("role", "Unknown"),
+                "type": node.labels[0] if node.labels else "Unknown",
+                "properties": node.properties,
+            }
+            for node in graph.nodes
+        ]
+        relationships = [
+            {
+                "id": rel.id,
+                "source": rel.from_node,
+                "target": rel.to_node,
+                "type": rel.type,
+            }
+            for rel in graph.relationships
+        ]
+        return {"nodes": nodes, "relationships": relationships}
     except Exception as e:
         logger.exception("Error getting memory graph")
         raise HTTPException(status_code=500, detail=str(e))
@@ -276,6 +271,59 @@ async def get_preferences(
         }
     except Exception as e:
         logger.exception("Error getting preferences")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/memory/locations")
+async def get_memory_locations(
+    session_id: str = Query(...),
+):
+    """Get geocoded location entities from memory for map visualization."""
+    client = get_memory_client()
+    try:
+        locations = await client.get_locations(
+            session_id=session_id,
+            has_coordinates=True,
+        )
+        return {
+            "locations": [
+                {
+                    "name": loc.get("name", "Unknown"),
+                    "lat": loc.get("latitude"),
+                    "lon": loc.get("longitude"),
+                    "type": loc.get("subtype", "location"),
+                    "description": loc.get("description"),
+                }
+                for loc in locations
+                if loc.get("latitude") is not None and loc.get("longitude") is not None
+            ]
+        }
+    except Exception as e:
+        logger.exception("Error getting memory locations")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/memory/sessions")
+async def list_memory_sessions():
+    """List conversation sessions."""
+    client = get_memory_client()
+    try:
+        sessions_list = await client.short_term.list_sessions()
+        return {"sessions": sessions_list}
+    except Exception as e:
+        logger.exception("Error listing sessions")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/memory/session/{session_id}")
+async def clear_memory_session(session_id: str):
+    """Clear all messages in a session."""
+    try:
+        memory = await create_memory(session_id)
+        await memory.clear_session()
+        return {"status": "cleared", "session_id": session_id}
+    except Exception as e:
+        logger.exception("Error clearing session")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -22,10 +22,11 @@ Frontend (Next.js + Chakra UI)     Backend (FastAPI + MAF Agent)      Database (
 
 **Key technologies:**
 
-- **Backend**: FastAPI, Microsoft Agent Framework, neo4j-agent-memory, OpenAI GPT-4o
+- **Backend**: FastAPI, Microsoft Agent Framework, neo4j-agent-memory v0.1.0, OpenAI GPT-4o
 - **Frontend**: Next.js 14, React 18, Chakra UI v3, Neo4j NVL, Mapbox GL JS, Zustand
-- **Database**: Neo4j 5 with APOC, spatial indexes, and point() coordinates
+- **Database**: Neo4j 5 with APOC, spatial indexes, point() coordinates, and optional GDS
 - **Data**: TfL Unified API (stations, lines, routes, bike points, live disruptions)
+- **Memory**: POLE+O entity schema, entity deduplication, geocoding, Wikimedia enrichment, GDS graph algorithms
 
 ## Prerequisites
 
@@ -128,7 +129,7 @@ transport-for-maf/
 
 ## Agent Tools
 
-The agent has access to 10 transport tools and 6 memory tools:
+The agent has access to 10 transport tools and 9 memory tools:
 
 **Transport tools** (query Neo4j graph + live TfL API):
 | Tool | Description |
@@ -144,11 +145,20 @@ The agent has access to 10 transport tools and 6 memory tools:
 | `execute_cypher` | Read-only Cypher execution (validated) |
 | `get_graph_schema` | Neo4j graph schema introspection |
 
-**Memory tools** (from neo4j-agent-memory):
-- `search_memory` - Search conversation history and entities
-- `remember_preference` / `recall_preferences` - Persistent user preferences
-- `remember_fact` / `search_knowledge` - Long-term entity knowledge
-- `find_similar_tasks` - Reasoning trace retrieval
+**Memory tools** (from neo4j-agent-memory v0.1.0):
+| Tool | Description |
+|------|-------------|
+| `search_memory` | Semantic search across conversation history, entities, and preferences |
+| `remember_preference` | Store a user preference with category and context |
+| `recall_preferences` | Retrieve stored preferences by topic |
+| `remember_fact` | Store long-term knowledge as subject-predicate-object triples |
+| `search_knowledge` | Search the entity knowledge graph (POLE+O model) |
+| `find_similar_tasks` | Retrieve reasoning traces for similar past tasks |
+| `find_connection_path` | Find shortest path between entities in the memory graph (GDS) |
+| `find_similar_items` | Find similar entities based on graph relationships (GDS) |
+| `find_important_entities` | Rank entities by importance using PageRank (GDS) |
+
+The GDS (Graph Data Science) tools use Neo4j graph algorithms with automatic fallback to basic Cypher queries when the GDS plugin is not installed.
 
 Each transport tool returns JSON with `graph_data` (nodes/relationships for NVL visualization) and `map_markers` (coordinates for Mapbox), enabling the chat to drive map and graph updates.
 
@@ -186,8 +196,11 @@ Spatial indexes enable sub-millisecond geospatial queries using `point.distance(
 | GET | `/graph/neighborhood/{id}` | Graph node expansion |
 | GET | `/disruptions` | Live disruptions |
 | GET | `/memory/context?session_id=` | Memory context |
-| GET | `/memory/graph?session_id=` | Memory graph for NVL |
+| GET | `/memory/graph?session_id=` | Memory graph for NVL (via get_graph API) |
 | GET | `/memory/preferences?session_id=` | User preferences |
+| GET | `/memory/locations?session_id=` | Geocoded location entities for map |
+| GET | `/memory/sessions` | List conversation sessions |
+| DELETE | `/memory/session/{id}` | Clear a session |
 
 ## Testing
 
@@ -230,15 +243,28 @@ make clean              # Remove generated files
 
 ## Memory Features
 
-The agent uses three types of memory via neo4j-agent-memory:
+The agent uses three types of memory via neo4j-agent-memory v0.1.0:
 
 - **Short-term**: Conversation messages within a session (full history passed to agent for multi-turn context)
-- **Long-term**: Entities extracted from conversations (stations, lines mentioned) and user preferences (e.g., "I prefer step-free access"). Entity extraction uses LLM-based extraction via OpenAI.
+- **Long-term**: Entities extracted from conversations using the POLE+O schema (Person, Object, Location, Event, Organization), user preferences, and factual knowledge stored as RDF-style triples
 - **Reasoning traces**: Records of tool calls and outcomes for similar-task retrieval
 
-Memory operations after response generation (saving assistant messages and reasoning traces) run asynchronously to avoid blocking the SSE stream.
+### neo4j-agent-memory v0.1.0 Features
 
-Memory persists across sessions in Neo4j and is visualized in the Memory Graph tab.
+<!-- Diagram: Memory types and their components -->
+*Architecture diagram: [img/memory-types-diagram.excalidraw](img/memory-types-diagram.excalidraw)*
+
+- **POLE+O Entity Schema**: Entities are classified as Person, Object, Location, Event, or Organization with optional subtypes. Location entities map naturally to transport stations and landmarks.
+- **Entity Deduplication**: Composite resolution strategy (exact + fuzzy + semantic matching) prevents duplicate entities when users refer to the same station differently ("King's Cross" vs "Kings Cross St Pancras").
+- **Geocoding**: Location entities are automatically geocoded using the Nominatim provider (free, no API key required). Geocoded locations can be displayed on the map via the `/memory/locations` endpoint.
+- **Wikimedia Enrichment**: Entities are enriched in the background with Wikipedia descriptions and metadata, providing additional context about stations and landmarks.
+- **GDS Graph Algorithms**: The memory graph can be analyzed using Neo4j Graph Data Science algorithms (PageRank, shortest path, node similarity) with automatic fallback to basic Cypher when GDS is not installed.
+- **Memory Graph Export API**: The `/memory/graph` endpoint uses the typed `get_graph()` API for reliable memory graph visualization.
+- **Session Management**: List sessions (`/memory/sessions`) and clear session data (`DELETE /memory/session/{id}`).
+
+Memory operations after response generation (saving assistant messages, extracting entities, recording reasoning traces, geocoding, and enrichment) run asynchronously to avoid blocking the SSE stream.
+
+Memory persists across sessions in Neo4j and is visualized in the Memory Graph tab. Geocoded location entities from conversations can also be displayed on the map.
 
 ## License
 

@@ -125,3 +125,12 @@ export interface MemoryContext {
     steps: number;
   }>;
 }
+
+// Memory location (geocoded entity from memory)
+export interface MemoryLocation {
+  name: string;
+  lat: number;
+  lon: number;
+  type: string;
+  description?: string;
+}

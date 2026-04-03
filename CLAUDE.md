@@ -98,17 +98,22 @@ The ChatPanel parses tool_result SSE events and dispatches to the Zustand store,
 `POST /chat` returns Server-Sent Events with event types: `token`, `tool_call`, `tool_result`, `done`, `error`. The frontend processes these via an async generator in `lib/api.ts`.
 
 ### Memory integration
-The agent uses `neo4j-agent-memory` with three memory types:
+The agent uses `neo4j-agent-memory` v0.1.0 with three memory types:
 - **Short-term**: conversation messages (auto-stored via `memory.save_message()`)
-- **Long-term**: entities + preferences (via `create_memory_tools()`)
+- **Long-term**: entities (POLE+O schema) + preferences + facts (via `create_memory_tools()`)
 - **Reasoning**: tool call traces (via `record_agent_trace()`)
 
-Memory tools are created by `create_memory_tools(memory)` from `neo4j_agent_memory.integrations.microsoft_agent`.
+Memory tools (9 total) are created by `create_memory_tools(memory, include_gds_tools=True)` from `neo4j_agent_memory.integrations.microsoft_agent`. This includes 6 core tools + 3 GDS graph algorithm tools (find_connection_path, find_similar_items, find_important_entities).
 
 Key implementation details:
 - **Conversation history**: `run_agent_stream()` retrieves full conversation history via `memory.get_conversation(limit=20)` and passes all messages to `agent.run()` for proper multi-turn context.
-- **Async memory saving**: Post-response memory operations (saving assistant message + reasoning trace) run as fire-and-forget `asyncio.create_task()` to avoid blocking the SSE stream.
+- **Async memory saving**: Post-response memory operations (saving assistant message + reasoning trace + entity extraction + geocoding + enrichment) run as fire-and-forget `asyncio.create_task()` to avoid blocking the SSE stream.
 - **Entity extraction**: Configured with `ExtractionConfig(extractor_type=ExtractorType.LLM)` in `memory_setup.py` to use OpenAI for extraction (spaCy/GLiNER not installed).
+- **Entity resolution**: Composite strategy (exact + fuzzy + semantic) configured via `ResolutionConfig` in `memory_setup.py` for entity deduplication.
+- **Geocoding**: Location entities auto-geocoded via Nominatim provider. Exposed via `/memory/locations` endpoint.
+- **Enrichment**: Wikimedia enrichment runs in background for entity context.
+- **GDS integration**: `GDSConfig(enabled=True, fallback_to_basic=True)` in `memory_setup.py` enables graph algorithm tools with Cypher fallback when GDS plugin is not installed.
+- **Memory graph export**: `/memory/graph` uses the typed `get_graph()` API instead of custom Cypher.
 
 ### Line network graph endpoint
 `GET /lines/{id}/graph` returns the full subgraph for a line in a single Cypher query: Station nodes (ordered by sequence), Zone nodes with IN_ZONE relationships, BikePoint nodes with NEAR_STATION relationships, and NEXT_STOP edges between consecutive stations. The frontend `LineStatusBanner` calls this when a line badge is clicked, populating both the map and graph views.

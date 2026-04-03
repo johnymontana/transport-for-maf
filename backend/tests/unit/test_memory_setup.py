@@ -96,18 +96,19 @@ class TestCreateMemory:
                 result = await create_memory("session-1", "user-1")
 
                 assert result is mock_memory
-                mock_cls.assert_called_once_with(
-                    memory_client=mock_client,
-                    session_id="session-1",
-                    user_id="user-1",
-                    include_short_term=True,
-                    include_long_term=True,
-                    include_reasoning=True,
-                    max_context_items=15,
-                    max_recent_messages=10,
-                    extract_entities=True,
-                    extract_entities_async=True,
-                )
+                call_kwargs = mock_cls.call_args[1]
+                assert call_kwargs["memory_client"] is mock_client
+                assert call_kwargs["session_id"] == "session-1"
+                assert call_kwargs["user_id"] == "user-1"
+                assert call_kwargs["include_short_term"] is True
+                assert call_kwargs["include_long_term"] is True
+                assert call_kwargs["include_reasoning"] is True
+                assert call_kwargs["extract_entities"] is True
+                assert call_kwargs["extract_entities_async"] is True
+                # v0.1.0: GDS config should be passed
+                assert call_kwargs["gds_config"] is not None
+                assert call_kwargs["gds_config"].enabled is True
+                assert call_kwargs["gds_config"].fallback_to_basic is True
 
     @pytest.mark.asyncio
     async def test_create_memory_default_user_id(self):

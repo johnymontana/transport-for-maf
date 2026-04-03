@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { GraphData, Line, MapMarker, Station } from "@/lib/types";
+import type { GraphData, Line, MapMarker, MemoryLocation, Station } from "@/lib/types";
 import { v4 as uuid } from "uuid";
 
 export type MainView = "map" | "graph" | "memory";
@@ -22,6 +22,9 @@ interface AppState {
   // Graph
   graphData: GraphData | null;
 
+  // Memory locations
+  memoryLocations: MemoryLocation[];
+
   // View
   mainView: MainView;
   mobilePanel: MobilePanel;
@@ -34,6 +37,7 @@ interface AppState {
   addMapMarkers: (markers: MapMarker[]) => void;
   setRouteCoordinates: (coords: [number, number][] | null) => void;
   setGraphData: (data: GraphData | null) => void;
+  setMemoryLocations: (locations: MemoryLocation[]) => void;
   setMainView: (view: MainView) => void;
   setMobilePanel: (panel: MobilePanel) => void;
   clearSelection: () => void;
@@ -49,6 +53,7 @@ export const useAppStore = create<AppState>((set) => ({
   mapMarkers: [],
   routeCoordinates: null,
   graphData: null,
+  memoryLocations: [],
   mainView: "map",
   mobilePanel: "main",
 
@@ -81,6 +86,8 @@ export const useAppStore = create<AppState>((set) => ({
   setRouteCoordinates: (coords) => set({ routeCoordinates: coords }),
 
   setGraphData: (data) => set({ graphData: data }),
+
+  setMemoryLocations: (locations) => set({ memoryLocations: locations }),
 
   setMainView: (view) => set({ mainView: view }),
 

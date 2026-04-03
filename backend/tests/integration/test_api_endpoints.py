@@ -28,11 +28,18 @@ def _mock_memory_client(graph_results=None):
     client.short_term.get_conversation = AsyncMock(
         return_value=MagicMock(messages=[])
     )
+    client.short_term.list_sessions = AsyncMock(return_value=[])
+    client.short_term.clear_session = AsyncMock()
     client.long_term = MagicMock()
     client.long_term.search_entities = AsyncMock(return_value=[])
     client.long_term.search_preferences = AsyncMock(return_value=[])
     client.reasoning = MagicMock()
     client.reasoning.get_similar_traces = AsyncMock(return_value=[])
+    # Memory graph export API (v0.1.0)
+    client.get_graph = AsyncMock(
+        return_value=MagicMock(nodes=[], relationships=[], metadata={})
+    )
+    client.get_locations = AsyncMock(return_value=[])
     return client
 
 
@@ -233,12 +240,12 @@ class TestMemoryEndpoints:
 
     @pytest.mark.asyncio
     async def test_get_memory_graph(self, client, mock_client):
-        mock_client.graph.execute_read = AsyncMock(return_value=[])
         resp = await client.get("/memory/graph", params={"session_id": "test-1"})
         assert resp.status_code == 200
         data = resp.json()
         assert "nodes" in data
         assert "relationships" in data
+        mock_client.get_graph.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_get_preferences(self, client, mock_client):
@@ -246,6 +253,37 @@ class TestMemoryEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert "preferences" in data
+
+    @pytest.mark.asyncio
+    async def test_get_memory_locations(self, client, mock_client):
+        mock_client.get_locations = AsyncMock(return_value=[
+            {"name": "King's Cross", "latitude": 51.5308, "longitude": -0.1238, "subtype": "station", "description": "Railway station"},
+        ])
+        resp = await client.get("/memory/locations", params={"session_id": "test-1"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "locations" in data
+        assert len(data["locations"]) == 1
+        assert data["locations"][0]["name"] == "King's Cross"
+        assert data["locations"][0]["lat"] == 51.5308
+
+    @pytest.mark.asyncio
+    async def test_list_memory_sessions(self, client, mock_client):
+        resp = await client.get("/memory/sessions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "sessions" in data
+
+    @pytest.mark.asyncio
+    async def test_clear_memory_session(self, client, mock_client):
+        with patch("app.main.create_memory", new_callable=AsyncMock) as mock_mem:
+            mock_memory = MagicMock()
+            mock_memory.clear_session = AsyncMock()
+            mock_mem.return_value = mock_memory
+            resp = await client.delete("/memory/session/test-1")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "cleared"
 
 
 # ---------------------------------------------------------------------------

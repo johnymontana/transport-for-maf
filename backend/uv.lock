@@ -950,7 +950,7 @@ name = "clr-loader"
 version = "0.2.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi" },
+    { name = "cffi", marker = "python_full_version < '3.14'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/18/24/c12faf3f61614b3131b5c98d3bf0d376b49c7feaa73edca559aeb2aee080/clr_loader-0.2.10.tar.gz", hash = "sha256:81f114afbc5005bafc5efe5af1341d400e22137e275b042a8979f3feb9fc9446", size = 83605, upload-time = "2026-01-03T23:13:06.984Z" }
 wheels = [
@@ -2116,16 +2116,16 @@ wheels = [
 
 [[package]]
 name = "neo4j-agent-memory"
-version = "0.0.5"
+version = "0.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "neo4j" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/61/2c/32569ab2889fe63878bb91d10a8669df0852998bf00bf7921c8dc35833d6/neo4j_agent_memory-0.0.5.tar.gz", hash = "sha256:6825876134e2483d8373642f378a9ec091f9c7a8d7ea5fa8493fff3c53de19a4", size = 229640, upload-time = "2026-03-09T12:03:24.064Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/27/49d4aaceec81bb6b5c6d863f923beef63c00178188e049a0b716d23066e1/neo4j_agent_memory-0.1.0.tar.gz", hash = "sha256:c9540494c3c8df37297a15e0b8c218650575320d374567bf2196dcbe5dd23812", size = 216429, upload-time = "2026-04-03T01:30:24.88Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/02/df/bd41c607bebce844ad884bbf1f1d2bff093f974d5a589e407c4058128953/neo4j_agent_memory-0.0.5-py3-none-any.whl", hash = "sha256:586476aae68a3d3948a9a715021d0ed4326ab7ffefe7e9830a1de294b7753e8f", size = 271482, upload-time = "2026-03-09T12:03:22.67Z" },
+    { url = "https://files.pythonhosted.org/packages/58/af/9f8f7b260e46e273523735b9defa99045105298d5201f87e19a0879cf19c/neo4j_agent_memory-0.1.0-py3-none-any.whl", hash = "sha256:9c7488907b04f42b5330809693ccc358b5e5274666f6cc7f0815855f04944b90", size = 276106, upload-time = "2026-04-03T01:30:23.185Z" },
 ]
 
 [package.optional-dependencies]
@@ -2398,8 +2398,8 @@ name = "powerfx"
 version = "0.0.34"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi" },
-    { name = "pythonnet" },
+    { name = "cffi", marker = "python_full_version < '3.14'" },
+    { name = "pythonnet", marker = "python_full_version < '3.14'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9f/fb/6c4bf87e0c74ca1c563921ce89ca1c5785b7576bca932f7255cdf81082a7/powerfx-0.0.34.tar.gz", hash = "sha256:956992e7afd272657ed16d80f4cad24ec95d9e4a79fb9dfa4a068a09e136af32", size = 3237555, upload-time = "2025-12-22T15:50:59.682Z" }
 wheels = [
@@ -2797,7 +2797,7 @@ name = "pythonnet"
 version = "3.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "clr-loader" },
+    { name = "clr-loader", marker = "python_full_version < '3.14'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9a/d6/1afd75edd932306ae9bd2c2d961d603dc2b52fcec51b04afea464f1f6646/pythonnet-3.0.5.tar.gz", hash = "sha256:48e43ca463941b3608b32b4e236db92d8d40db4c58a75ace902985f76dac21cf", size = 239212, upload-time = "2024-12-13T08:30:44.393Z" }
 wheels = [
@@ -3250,7 +3250,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
     { name = "neo4j", specifier = ">=5.26.0" },
-    { name = "neo4j-agent-memory", extras = ["openai", "microsoft-agent"] },
+    { name = "neo4j-agent-memory", extras = ["openai", "microsoft-agent"], specifier = ">=0.1.0" },
     { name = "openai", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },

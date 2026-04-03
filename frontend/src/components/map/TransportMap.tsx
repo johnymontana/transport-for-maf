@@ -32,6 +32,7 @@ export function TransportMap() {
     routeCoordinates,
     selectedStation,
     setSelectedStation,
+    memoryLocations,
   } = useAppStore();
 
   const [allStations, setAllStations] = useState<Station[]>([]);
@@ -241,6 +242,49 @@ export function TransportMap() {
               lineClamp={1}
             >
               {marker.name.replace(/ Underground Station$/, "").replace(/ Station$/, "")}
+            </Text>
+          </div>
+        </Marker>
+      ))}
+
+      {/* Memory location markers (geocoded entities from conversations) */}
+      {memoryLocations.map((loc, i) => (
+        <Marker
+          key={`memory-${i}`}
+          latitude={loc.lat}
+          longitude={loc.lon}
+          anchor="center"
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                backgroundColor: "#6366F1",
+                border: "2px solid white",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+              }}
+            />
+            <Text
+              fontSize="8px"
+              fontWeight="bold"
+              color="purple.700"
+              mt={0.5}
+              bg="rgba(255,255,255,0.9)"
+              px={1}
+              borderRadius="sm"
+              maxW="100px"
+              textAlign="center"
+              lineClamp={1}
+            >
+              {loc.name}
             </Text>
           </div>
         </Marker>

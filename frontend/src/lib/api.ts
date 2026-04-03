@@ -2,7 +2,7 @@
  * API client for the TfL Explorer backend.
  */
 
-import type { GraphData, GraphNode, GraphRelationship, Line, MapMarker, MemoryContext, Station } from "./types";
+import type { GraphData, GraphNode, GraphRelationship, Line, MapMarker, MemoryContext, MemoryLocation, Station } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -151,6 +151,22 @@ export async function getPreferences(
   const resp = await fetch(`${API_BASE}/memory/preferences?${params}`);
   if (!resp.ok) throw new Error("Failed to get preferences");
   return resp.json();
+}
+
+export async function getMemoryLocations(
+  sessionId: string
+): Promise<{ locations: MemoryLocation[] }> {
+  const params = new URLSearchParams({ session_id: sessionId });
+  const resp = await fetch(`${API_BASE}/memory/locations?${params}`);
+  if (!resp.ok) throw new Error("Failed to get memory locations");
+  return resp.json();
+}
+
+export async function clearSession(sessionId: string): Promise<void> {
+  const resp = await fetch(`${API_BASE}/memory/session/${sessionId}`, {
+    method: "DELETE",
+  });
+  if (!resp.ok) throw new Error("Failed to clear session");
 }
 
 // --- Graph endpoints ---

@@ -11,8 +11,7 @@ import Map, {
 } from "react-map-gl";
 import { Box, Text } from "@chakra-ui/react";
 import { useAppStore } from "@/store/useAppStore";
-import { getStations } from "@/lib/api";
-import type { Station, MapMarker } from "@/lib/types";
+import type { Station } from "@/lib/types";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
@@ -22,6 +21,10 @@ const LONDON_CENTER = {
   longitude: -0.09,
   zoom: 12,
 };
+
+function shortName(name: string) {
+  return name.replace(/ Underground Station$/, "").replace(/ Station$/, "");
+}
 
 export function TransportMap() {
   const mapRef = useRef<MapRef>(null);
@@ -33,21 +36,20 @@ export function TransportMap() {
     selectedStation,
     setSelectedStation,
     memoryLocations,
+    allStations,
+    loadStations,
   } = useAppStore();
 
-  const [allStations, setAllStations] = useState<Station[]>([]);
   const [viewState, setViewState] = useState({
     latitude: LONDON_CENTER.latitude,
     longitude: LONDON_CENTER.longitude,
     zoom: LONDON_CENTER.zoom,
   });
 
-  // Load all stations on mount
+  // Load all stations on mount (cached in store)
   useEffect(() => {
-    getStations()
-      .then((data) => setAllStations(data.stations))
-      .catch(console.error);
-  }, []);
+    loadStations();
+  }, [loadStations]);
 
   // Fly to when mapCenter changes from store
   useEffect(() => {
@@ -111,7 +113,7 @@ export function TransportMap() {
     >
       <NavigationControl position="top-right" />
 
-      {/* All stations as small dots when zoomed out */}
+      {/* All stations as dots when zoomed out */}
       {viewState.zoom < 13 &&
         allStations.map((station) => (
           <Marker
@@ -125,11 +127,16 @@ export function TransportMap() {
             }}
           >
             <div
+              aria-label={station.name}
+              title={station.name}
               style={{
-                width: 6,
-                height: 6,
+                width: 10,
+                height: 10,
                 borderRadius: "50%",
-                backgroundColor: "#DA7194",
+                backgroundColor:
+                  selectedStation?.naptanId === station.naptanId
+                    ? "#E32017"
+                    : "#DA7194",
                 border: "1px solid white",
                 cursor: "pointer",
               }}
@@ -157,6 +164,7 @@ export function TransportMap() {
               }}
             >
               <div
+                aria-label={station.name}
                 style={{
                   display: "flex",
                   flexDirection: "column",
@@ -167,9 +175,9 @@ export function TransportMap() {
                 <div
                   style={{
                     width:
-                      selectedStation?.naptanId === station.naptanId ? 16 : 10,
+                      selectedStation?.naptanId === station.naptanId ? 18 : 14,
                     height:
-                      selectedStation?.naptanId === station.naptanId ? 16 : 10,
+                      selectedStation?.naptanId === station.naptanId ? 18 : 14,
                     borderRadius: "50%",
                     backgroundColor:
                       selectedStation?.naptanId === station.naptanId
@@ -191,8 +199,9 @@ export function TransportMap() {
                     bg="rgba(255,255,255,0.8)"
                     px={0.5}
                     borderRadius="sm"
+                    title={station.name}
                   >
-                    {station.name.replace(/ Underground Station$/, "").replace(/ Station$/, "")}
+                    {shortName(station.name)}
                   </Text>
                 )}
               </div>
@@ -208,6 +217,7 @@ export function TransportMap() {
           anchor="center"
         >
           <div
+            aria-label={marker.name}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -216,8 +226,8 @@ export function TransportMap() {
           >
             <div
               style={{
-                width: marker.type === "bikepoint" ? 8 : 14,
-                height: marker.type === "bikepoint" ? 8 : 14,
+                width: marker.type === "bikepoint" ? 10 : 16,
+                height: marker.type === "bikepoint" ? 10 : 16,
                 borderRadius: "50%",
                 backgroundColor:
                   marker.type === "bikepoint"
@@ -240,8 +250,9 @@ export function TransportMap() {
               maxW="100px"
               textAlign="center"
               lineClamp={1}
+              title={marker.name}
             >
-              {marker.name.replace(/ Underground Station$/, "").replace(/ Station$/, "")}
+              {shortName(marker.name)}
             </Text>
           </div>
         </Marker>
@@ -256,6 +267,7 @@ export function TransportMap() {
           anchor="center"
         >
           <div
+            aria-label={loc.name}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -283,6 +295,7 @@ export function TransportMap() {
               maxW="100px"
               textAlign="center"
               lineClamp={1}
+              title={loc.name}
             >
               {loc.name}
             </Text>

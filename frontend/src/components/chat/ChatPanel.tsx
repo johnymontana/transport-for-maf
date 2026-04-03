@@ -105,18 +105,17 @@ export function ChatPanel() {
         }
       }
     } catch {
-      // Not JSON or doesn't have expected shape
+      // Tool result may not be JSON
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: "user",
-      content: input.trim(),
+      content: text.trim(),
       timestamp: new Date(),
     };
 
@@ -174,19 +173,22 @@ export function ChatPanel() {
 
         if (event.event === "tool_result" && data.result) {
           processToolResult(data.result);
+          // Match result to the first unresolved tool call (by position)
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    toolCalls: m.toolCalls?.map((tc) =>
-                      tc.name === data.name
-                        ? { ...tc, result: data.result as string }
-                        : tc
-                    ),
+            prev.map((m) => {
+              if (m.id !== assistantId) return m;
+              let matched = false;
+              return {
+                ...m,
+                toolCalls: m.toolCalls?.map((tc) => {
+                  if (!tc.result && !matched) {
+                    matched = true;
+                    return { ...tc, result: data.result as string };
                   }
-                : m
-            )
+                  return tc;
+                }),
+              };
+            })
           );
         }
 
@@ -235,6 +237,11 @@ export function ChatPanel() {
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSend(input);
+  };
+
   const examplePrompts = [
     "Find stations near Big Ben",
     "Show me the Northern Line",
@@ -246,7 +253,7 @@ export function ChatPanel() {
   return (
     <Flex direction="column" h="100%" bg="gray.50" borderRight={{ base: "none", lg: "1px solid" }} borderColor="gray.200">
       <Box p={4} borderBottom="1px solid" borderColor="gray.200" bg="white">
-        <Heading size="md" color="blue.700">
+        <Heading as="h1" size="md" color="blue.700">
           TfL Explorer
         </Heading>
         <Text fontSize="xs" color="gray.500">
@@ -260,30 +267,31 @@ export function ChatPanel() {
           {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
+
+          {/* Suggestion prompts (inline after messages) */}
+          {messages.length <= 2 && (
+            <Flex gap={2} flexWrap="wrap">
+              {examplePrompts.map((prompt, i) => (
+                <Button
+                  key={i}
+                  size="xs"
+                  variant="outline"
+                  colorPalette="blue"
+                  onClick={() => handleSend(prompt)}
+                  whiteSpace="normal"
+                  textAlign="left"
+                  height="auto"
+                  py={1.5}
+                >
+                  {prompt}
+                </Button>
+              ))}
+            </Flex>
+          )}
+
           <div ref={messagesEndRef} />
         </VStack>
       </Box>
-
-      {/* Example prompts */}
-      {messages.length <= 2 && (
-        <Flex gap={2} flexWrap="wrap" px={4} pb={2}>
-          {examplePrompts.map((prompt, i) => (
-            <Button
-              key={i}
-              size="xs"
-              variant="outline"
-              colorPalette="blue"
-              onClick={() => setInput(prompt)}
-              whiteSpace="normal"
-              textAlign="left"
-              height="auto"
-              py={1.5}
-            >
-              {prompt}
-            </Button>
-          ))}
-        </Flex>
-      )}
 
       {/* Input */}
       <Box as="form" onSubmit={handleSubmit} p={4} bg="white" borderTop="1px solid" borderColor="gray.200">
@@ -369,9 +377,24 @@ function MessageBubble({ message }: { message: Message }) {
               <ReactMarkdown>{message.content}</ReactMarkdown>
             </Box>
           ) : message.isStreaming ? (
-            <HStack>
-              <Spinner size="sm" />
-              <Text fontSize="sm">Thinking...</Text>
+            <HStack gap={2}>
+              <Text
+                fontSize="sm"
+                color={isUser ? "blue.200" : "gray.400"}
+                css={{
+                  "&::after": {
+                    content: "'...'",
+                    animation: "thinking 1.5s infinite",
+                  },
+                  "@keyframes thinking": {
+                    "0%": { content: "'.'" },
+                    "33%": { content: "'..'" },
+                    "66%": { content: "'...'" },
+                  },
+                }}
+              >
+                Thinking
+              </Text>
             </HStack>
           ) : null}
         </Card.Body>

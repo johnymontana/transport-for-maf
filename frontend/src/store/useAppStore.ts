@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { GraphData, Line, MapMarker, MemoryLocation, Station } from "@/lib/types";
+import { getStations } from "@/lib/api";
 import { v4 as uuid } from "uuid";
 
 export type MainView = "map" | "graph" | "memory";
@@ -25,6 +26,10 @@ interface AppState {
   // Memory locations
   memoryLocations: MemoryLocation[];
 
+  // Stations cache
+  allStations: Station[];
+  stationsLoaded: boolean;
+
   // View
   mainView: MainView;
   mobilePanel: MobilePanel;
@@ -38,12 +43,13 @@ interface AppState {
   setRouteCoordinates: (coords: [number, number][] | null) => void;
   setGraphData: (data: GraphData | null) => void;
   setMemoryLocations: (locations: MemoryLocation[]) => void;
+  loadStations: () => Promise<void>;
   setMainView: (view: MainView) => void;
   setMobilePanel: (panel: MobilePanel) => void;
   clearSelection: () => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   // Initial state
   sessionId: uuid(),
   selectedStation: null,
@@ -54,6 +60,8 @@ export const useAppStore = create<AppState>((set) => ({
   routeCoordinates: null,
   graphData: null,
   memoryLocations: [],
+  allStations: [],
+  stationsLoaded: false,
   mainView: "map",
   mobilePanel: "main",
 
@@ -88,6 +96,16 @@ export const useAppStore = create<AppState>((set) => ({
   setGraphData: (data) => set({ graphData: data }),
 
   setMemoryLocations: (locations) => set({ memoryLocations: locations }),
+
+  loadStations: async () => {
+    if (get().stationsLoaded) return;
+    try {
+      const data = await getStations();
+      set({ allStations: data.stations, stationsLoaded: true });
+    } catch (err) {
+      console.error("Failed to load stations:", err);
+    }
+  },
 
   setMainView: (view) => set({ mainView: view }),
 

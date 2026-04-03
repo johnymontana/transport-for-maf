@@ -103,11 +103,28 @@ export function LineStatusBanner() {
   }
 
   return (
-    <Box bg="gray.800" px={4} py={1.5} overflow="hidden">
-      <HStack gap={3} overflowX="auto" css={{ "&::-webkit-scrollbar": { display: "none" } }}>
+    <Box bg="gray.800" px={4} py={1.5} position="relative" overflow="hidden">
+      <HStack gap={2} overflowX="auto" css={{ "&::-webkit-scrollbar": { display: "none" } }}>
         <Text color="gray.400" fontSize="xs" flexShrink={0} fontWeight="bold">
           Lines:
         </Text>
+
+        {/* "All" clear button */}
+        <Badge
+          bg={selectedLine ? "gray.600" : "white"}
+          color={selectedLine ? "white" : "gray.800"}
+          fontSize="10px"
+          px={2}
+          py={0.5}
+          borderRadius="sm"
+          flexShrink={0}
+          cursor="pointer"
+          _hover={{ opacity: 0.8 }}
+          onClick={() => clearSelection()}
+        >
+          All
+        </Badge>
+
         {lines.map((line) => {
           const isSelected = selectedLine?.lineId === line.lineId;
           const isLoading = loading === line.lineId;
@@ -137,6 +154,17 @@ export function LineStatusBanner() {
           );
         })}
       </HStack>
+
+      {/* Right edge fade to indicate scrollable content */}
+      <Box
+        position="absolute"
+        right={0}
+        top={0}
+        bottom={0}
+        width="40px"
+        background="linear-gradient(to right, transparent, #1a202c)"
+        pointerEvents="none"
+      />
     </Box>
   );
 }

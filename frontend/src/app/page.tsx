@@ -50,67 +50,108 @@ const mobileNavItems: { panel: MobilePanel; label: string }[] = [
 ];
 
 export default function Home() {
-  const { mobilePanel, setMobilePanel } = useAppStore();
+  const { mobilePanel, setMobilePanel, setMainView } = useAppStore();
+
+  const handleMobileNav = (panel: MobilePanel) => {
+    setMobilePanel(panel);
+    // "Map" tab should always show the geographic map, not a previously active sub-tab
+    if (panel === "main") {
+      setMainView("map");
+    }
+  };
 
   return (
     <Box h="100vh" display="flex" flexDirection="column">
-      <LineStatusBanner />
+      {/* Skip navigation link for keyboard users */}
+      <a
+        href="#main-content"
+        style={{
+          position: "absolute",
+          left: "-9999px",
+          top: "auto",
+          zIndex: 9999,
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.position = "fixed";
+          e.currentTarget.style.top = "0";
+          e.currentTarget.style.left = "0";
+          e.currentTarget.style.padding = "8px 16px";
+          e.currentTarget.style.background = "#2B6CB0";
+          e.currentTarget.style.color = "white";
+          e.currentTarget.style.fontWeight = "bold";
+          e.currentTarget.style.fontSize = "14px";
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.position = "absolute";
+          e.currentTarget.style.left = "-9999px";
+        }}
+      >
+        Skip to main content
+      </a>
+
+      <Box as="nav" aria-label="Line filters">
+        <LineStatusBanner />
+      </Box>
 
       {/* Desktop layout (lg+) */}
-      <Grid
-        display={{ base: "none", lg: "grid" }}
-        templateColumns={{ lg: "350px 1fr", xl: "350px 1fr 320px" }}
-        flex={1}
-        overflow="hidden"
-      >
-        <GridItem h="100%" overflow="hidden">
-          <ChatPanel />
-        </GridItem>
-
-        <GridItem h="100%" overflow="hidden">
-          <CenterPanel />
-        </GridItem>
-
-        <GridItem h="100%" overflow="hidden" display={{ lg: "none", xl: "block" }}>
-          <DetailPanel />
-        </GridItem>
-      </Grid>
-
-      {/* Mobile layout (< lg) */}
-      <Box
-        display={{ base: "flex", lg: "none" }}
-        flex={1}
-        flexDirection="column"
-        overflow="hidden"
-      >
-        <Box flex={1} overflow="hidden">
-          {mobilePanel === "chat" && <ChatPanel />}
-          {mobilePanel === "main" && <CenterPanel />}
-          {mobilePanel === "detail" && <DetailPanel />}
-        </Box>
-
-        {/* Bottom navigation */}
-        <HStack
-          bg="white"
-          borderTop="1px solid"
-          borderColor="gray.200"
-          justify="space-around"
-          py={2}
-          flexShrink={0}
+      <Box as="main" id="main-content" flex={1} overflow="hidden">
+        <Grid
+          display={{ base: "none", lg: "grid" }}
+          templateColumns={{ lg: "350px 1fr 280px", xl: "350px 1fr 320px" }}
+          h="100%"
+          overflow="hidden"
         >
-          {mobileNavItems.map(({ panel, label }) => (
-            <Button
-              key={panel}
-              variant="ghost"
-              size="sm"
-              color={mobilePanel === panel ? "blue.600" : "gray.500"}
-              fontWeight={mobilePanel === panel ? "bold" : "normal"}
-              onClick={() => setMobilePanel(panel)}
-            >
-              {label}
-            </Button>
-          ))}
-        </HStack>
+          <GridItem as="aside" aria-label="Chat assistant" h="100%" overflow="hidden">
+            <ChatPanel />
+          </GridItem>
+
+          <GridItem as="section" aria-label="Map and visualizations" h="100%" overflow="hidden">
+            <CenterPanel />
+          </GridItem>
+
+          <GridItem as="aside" aria-label="Station details" h="100%" overflow="hidden">
+            <DetailPanel />
+          </GridItem>
+        </Grid>
+
+        {/* Mobile layout (< lg) */}
+        <Box
+          display={{ base: "flex", lg: "none" }}
+          h="100%"
+          flexDirection="column"
+          overflow="hidden"
+        >
+          <Box flex={1} overflow="hidden">
+            {mobilePanel === "chat" && <ChatPanel />}
+            {mobilePanel === "main" && <CenterPanel />}
+            {mobilePanel === "detail" && <DetailPanel />}
+          </Box>
+
+          {/* Bottom navigation */}
+          <HStack
+            as="nav"
+            aria-label="Navigation"
+            bg="white"
+            borderTop="1px solid"
+            borderColor="gray.200"
+            justify="space-around"
+            py={2}
+            flexShrink={0}
+          >
+            {mobileNavItems.map(({ panel, label }) => (
+              <Button
+                key={panel}
+                variant="ghost"
+                size="sm"
+                color={mobilePanel === panel ? "blue.600" : "gray.500"}
+                fontWeight={mobilePanel === panel ? "bold" : "normal"}
+                onClick={() => handleMobileNav(panel)}
+              >
+                {label}
+              </Button>
+            ))}
+          </HStack>
+        </Box>
       </Box>
     </Box>
   );

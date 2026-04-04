@@ -3,6 +3,15 @@ import type { GraphData, Line, MapMarker, MemoryLocation, Station } from "@/lib/
 import { getStations } from "@/lib/api";
 import { v4 as uuid } from "uuid";
 
+const getOrCreateSessionId = (): string => {
+  if (typeof window === "undefined") return uuid();
+  const stored = sessionStorage.getItem("tfl-session-id");
+  if (stored) return stored;
+  const id = uuid();
+  sessionStorage.setItem("tfl-session-id", id);
+  return id;
+};
+
 export type MainView = "map" | "graph" | "memory";
 export type MobilePanel = "chat" | "main" | "detail";
 
@@ -51,7 +60,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => ({
   // Initial state
-  sessionId: uuid(),
+  sessionId: getOrCreateSessionId(),
   selectedStation: null,
   selectedLine: null,
   mapCenter: { lat: 51.505, lon: -0.09 },

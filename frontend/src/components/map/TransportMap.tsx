@@ -62,6 +62,21 @@ export function TransportMap() {
     }
   }, [mapCenter, mapZoom]);
 
+  // When map loads (or re-mounts), fly to current store position if not default
+  const handleMapLoad = useCallback(() => {
+    const { mapCenter: center, mapZoom: zoom } = useAppStore.getState();
+    if (
+      center.lat !== LONDON_CENTER.latitude ||
+      center.lon !== LONDON_CENTER.longitude
+    ) {
+      mapRef.current?.flyTo({
+        center: [center.lon, center.lat],
+        zoom,
+        duration: 800,
+      });
+    }
+  }, []);
+
   const handleMoveEnd = useCallback((e: ViewStateChangeEvent) => {
     setViewState(e.viewState);
   }, []);
@@ -107,6 +122,7 @@ export function TransportMap() {
       ref={mapRef}
       initialViewState={viewState}
       onMoveEnd={handleMoveEnd}
+      onLoad={handleMapLoad}
       mapboxAccessToken={MAPBOX_TOKEN}
       mapStyle="mapbox://styles/mapbox/light-v11"
       style={{ width: "100%", height: "100%" }}

@@ -63,29 +63,7 @@ export default function Home() {
   return (
     <Box h="100vh" display="flex" flexDirection="column">
       {/* Skip navigation link for keyboard users */}
-      <a
-        href="#main-content"
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          top: "auto",
-          zIndex: 9999,
-        }}
-        onFocus={(e) => {
-          e.currentTarget.style.position = "fixed";
-          e.currentTarget.style.top = "0";
-          e.currentTarget.style.left = "0";
-          e.currentTarget.style.padding = "8px 16px";
-          e.currentTarget.style.background = "#2B6CB0";
-          e.currentTarget.style.color = "white";
-          e.currentTarget.style.fontWeight = "bold";
-          e.currentTarget.style.fontSize = "14px";
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.position = "absolute";
-          e.currentTarget.style.left = "-9999px";
-        }}
-      >
+      <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
 

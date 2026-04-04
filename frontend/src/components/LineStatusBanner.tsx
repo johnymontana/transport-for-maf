@@ -103,7 +103,7 @@ export function LineStatusBanner() {
   }
 
   return (
-    <Box bg="gray.800" px={4} py={1.5} position="relative" overflow="hidden">
+    <Box bg="gray.800" px={4} py={1.5} position="relative">
       <HStack gap={2} overflowX="auto" css={{ "&::-webkit-scrollbar": { display: "none" } }}>
         <Text color="gray.400" fontSize="xs" flexShrink={0} fontWeight="bold">
           Lines:

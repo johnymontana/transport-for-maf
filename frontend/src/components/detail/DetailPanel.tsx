@@ -62,7 +62,7 @@ export function DetailPanel() {
   }, [sessionId]);
 
   return (
-    <Box h="100%" overflowY="auto" bg="gray.50" borderLeft="1px solid" borderColor="gray.200" p={4}>
+    <Box h="100%" overflowY="auto" bg="gray.100" borderLeftWidth="1px" borderLeftColor="gray.200" p={4}>
       <VStack align="stretch" gap={4}>
         {/* Station details */}
         {loading && (

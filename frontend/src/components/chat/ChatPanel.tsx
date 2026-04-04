@@ -61,6 +61,17 @@ export function ChatPanel() {
           panMapTo(markers[0].lat, markers[0].lon, 14);
           setMainView("map");
         }
+        // Auto-select first station for the detail panel
+        const firstStation = markers.find((m) => m.type === "station" || m.type === "route_stop");
+        if (firstStation) {
+          useAppStore.getState().setSelectedStation({
+            naptanId: (firstStation.metadata?.naptanId as string) || "",
+            name: firstStation.name,
+            lat: firstStation.lat,
+            lon: firstStation.lon,
+            zone: (firstStation.metadata?.zone as string) || null,
+          });
+        }
       }
 
       // Update graph data from tool results

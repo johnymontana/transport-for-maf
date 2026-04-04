@@ -17,21 +17,56 @@ import {
 import ReactMarkdown from "react-markdown";
 import { streamChat } from "@/lib/api";
 import { useAppStore } from "@/store/useAppStore";
-import type { Message, MapMarker, GraphData } from "@/lib/types";
+import type { Message, MapMarker, GraphData, ToolCall } from "@/lib/types";
+
+const MESSAGES_KEY = "tfl-chat-messages";
+
+const WELCOME_MESSAGE: Message = {
+  id: "welcome",
+  role: "assistant",
+  content:
+    "Hello! I'm TfL Explorer, your London transport assistant. I can help you find stations, plan routes, check line status, and find bike hire points. What would you like to know?",
+  timestamp: new Date(),
+};
+
+function groupToolCalls(
+  calls: ToolCall[]
+): { name: string; count: number; allDone: boolean }[] {
+  const groups: { name: string; count: number; allDone: boolean }[] = [];
+  for (const tc of calls) {
+    const last = groups[groups.length - 1];
+    if (last && last.name === tc.name) {
+      last.count++;
+      if (!tc.result) last.allDone = false;
+    } else {
+      groups.push({ name: tc.name, count: 1, allDone: !!tc.result });
+    }
+  }
+  return groups;
+}
 
 export function ChatPanel() {
   const { sessionId, setMapMarkers, setGraphData, panMapTo, setMainView } =
     useAppStore();
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content:
-        "Hello! I'm TfL Explorer, your London transport assistant. I can help you find stations, plan routes, check line status, and find bike hire points. What would you like to know?",
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window === "undefined") return [WELCOME_MESSAGE];
+    const stored = sessionStorage.getItem(MESSAGES_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        return parsed.map((m: Message) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+          isStreaming: false,
+          toolCalls: m.toolCalls?.map((tc) => ({ ...tc, result: tc.result ? "done" : undefined })),
+        }));
+      } catch {
+        return [WELCOME_MESSAGE];
+      }
+    }
+    return [WELCOME_MESSAGE];
+  });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -45,12 +80,35 @@ export function ChatPanel() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // Persist messages to sessionStorage
+  useEffect(() => {
+    const toStore = messages.map((m) => ({
+      ...m,
+      isStreaming: false,
+      toolCalls: m.toolCalls?.map((tc) => ({
+        name: tc.name,
+        result: tc.result ? "done" : undefined,
+      })),
+    }));
+    sessionStorage.setItem(MESSAGES_KEY, JSON.stringify(toStore));
+  }, [messages]);
+
   const processToolResult = (resultData: unknown) => {
     try {
       // Handle both string and already-parsed object
-      const result =
+      let result =
         typeof resultData === "string" ? JSON.parse(resultData) : resultData;
       if (!result || typeof result !== "object") return;
+
+      // Handle double-wrapped case where result contains a nested JSON string
+      const r = result as Record<string, unknown>;
+      if ("result" in r && typeof r.result === "string") {
+        try {
+          result = JSON.parse(r.result);
+        } catch {
+          // inner result is not JSON, keep outer object
+        }
+      }
 
       // Update map markers from tool results
       if (result.map_markers && result.map_markers.length > 0) {
@@ -345,7 +403,7 @@ function MessageBubble({ message }: { message: Message }) {
           {/* Tool calls */}
           {message.toolCalls && message.toolCalls.length > 0 && (
             <VStack align="stretch" gap={1} mb={2}>
-              {message.toolCalls.map((tc, i) => (
+              {groupToolCalls(message.toolCalls).map((group, i) => (
                 <Box
                   key={i}
                   bg={isUser ? "blue.700" : "gray.100"}
@@ -355,10 +413,15 @@ function MessageBubble({ message }: { message: Message }) {
                 >
                   <HStack>
                     <Badge colorPalette="purple" size="sm">
-                      {tc.name}
+                      {group.name}
                     </Badge>
-                    {!tc.result && <Spinner size="xs" />}
-                    {tc.result && (
+                    {group.count > 1 && (
+                      <Text fontSize="xs" color="gray.500">
+                        x{group.count}
+                      </Text>
+                    )}
+                    {!group.allDone && <Spinner size="xs" />}
+                    {group.allDone && (
                       <Text color="green.600" fontSize="xs">
                         done
                       </Text>

@@ -178,10 +178,10 @@ export function MemoryGraphView() {
         zIndex={10}
         gap={1}
         flexWrap="wrap"
-        maxW="70%"
+        maxW={{ base: "100%", md: "70%" }}
         bg="white"
         borderRadius="md"
-        p={1.5}
+        p={{ base: 1, md: 1.5 }}
         shadow="sm"
         borderWidth="1px"
         borderColor="gray.200"
@@ -192,7 +192,7 @@ export function MemoryGraphView() {
             style={{ backgroundColor: color }}
             color="white"
             fontSize="10px"
-            px={1.5}
+            px={{ base: 1, md: 1.5 }}
           >
             {type}
           </Badge>

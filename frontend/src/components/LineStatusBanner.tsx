@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Box, HStack, Text, Badge } from "@chakra-ui/react";
 import { getLines, getLineGraph } from "@/lib/api";
 import { TFL_LINE_COLORS } from "@/lib/graphStyles";
@@ -17,6 +17,9 @@ interface LineInfo {
 export function LineStatusBanner() {
   const [lines, setLines] = useState<LineInfo[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const {
     selectedLine,
     setSelectedLine,
@@ -26,11 +29,26 @@ export function LineStatusBanner() {
     clearSelection,
   } = useAppStore();
 
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+
+  const scrollBy = useCallback((offset: number) => {
+    scrollRef.current?.scrollBy({ left: offset, behavior: "smooth" });
+  }, []);
+
   useEffect(() => {
     getLines()
       .then((data) => setLines(data.lines))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    checkScroll();
+  }, [lines, checkScroll]);
 
   const handleLineClick = async (line: LineInfo) => {
     // Toggle off if already selected
@@ -104,7 +122,54 @@ export function LineStatusBanner() {
 
   return (
     <Box bg="gray.800" px={4} py={1.5} position="relative">
-      <HStack gap={2} overflowX="auto" css={{ "&::-webkit-scrollbar": { display: "none" } }}>
+      {/* Left scroll arrow */}
+      {canScrollLeft && (
+        <Box
+          position="absolute"
+          left={0}
+          top={0}
+          bottom={0}
+          zIndex={2}
+          display="flex"
+          alignItems="center"
+          pointerEvents="none"
+        >
+          <Box
+            background="linear-gradient(to left, transparent, #1a202c)"
+            position="absolute"
+            left={0}
+            top={0}
+            bottom={0}
+            width="40px"
+          />
+          <Box
+            as="button"
+            onClick={() => scrollBy(-200)}
+            pointerEvents="auto"
+            bg="gray.700"
+            color="white"
+            px={1}
+            py={1}
+            ml={0.5}
+            borderRadius="sm"
+            fontSize="xs"
+            fontWeight="bold"
+            _hover={{ bg: "gray.600" }}
+            zIndex={3}
+            cursor="pointer"
+          >
+            ‹
+          </Box>
+        </Box>
+      )}
+
+      <HStack
+        ref={scrollRef}
+        gap={2}
+        overflowX="auto"
+        onScroll={checkScroll}
+        css={{ "&::-webkit-scrollbar": { display: "none" } }}
+      >
         <Text color="gray.400" fontSize="xs" flexShrink={0} fontWeight="bold">
           Lines:
         </Text>
@@ -155,16 +220,47 @@ export function LineStatusBanner() {
         })}
       </HStack>
 
-      {/* Right edge fade to indicate scrollable content */}
-      <Box
-        position="absolute"
-        right={0}
-        top={0}
-        bottom={0}
-        width="40px"
-        background="linear-gradient(to right, transparent, #1a202c)"
-        pointerEvents="none"
-      />
+      {/* Right scroll arrow + fade */}
+      {canScrollRight && (
+        <Box
+          position="absolute"
+          right={0}
+          top={0}
+          bottom={0}
+          zIndex={2}
+          display="flex"
+          alignItems="center"
+          justifyContent="flex-end"
+          pointerEvents="none"
+        >
+          <Box
+            background="linear-gradient(to right, transparent, #1a202c)"
+            position="absolute"
+            right={0}
+            top={0}
+            bottom={0}
+            width="40px"
+          />
+          <Box
+            as="button"
+            onClick={() => scrollBy(200)}
+            pointerEvents="auto"
+            bg="gray.700"
+            color="white"
+            px={1}
+            py={1}
+            mr={0.5}
+            borderRadius="sm"
+            fontSize="xs"
+            fontWeight="bold"
+            _hover={{ bg: "gray.600" }}
+            zIndex={3}
+            cursor="pointer"
+          >
+            ›
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }

@@ -15,9 +15,11 @@ import {
   Heading,
 } from "@chakra-ui/react";
 import ReactMarkdown from "react-markdown";
-import { streamChat } from "@/lib/api";
+import { streamChat, clearSession, getChatHistory } from "@/lib/api";
+import { v4 as uuid } from "uuid";
 import { useAppStore } from "@/store/useAppStore";
-import type { Message, MapMarker, GraphData, ToolCall } from "@/lib/types";
+import type { Message, MapMarker, GraphData } from "@/lib/types";
+import { groupToolCalls } from "@/lib/chatUtils";
 
 const MESSAGES_KEY = "tfl-chat-messages";
 
@@ -28,22 +30,6 @@ const WELCOME_MESSAGE: Message = {
     "Hello! I'm TfL Explorer, your London transport assistant. I can help you find stations, plan routes, check line status, and find bike hire points. What would you like to know?",
   timestamp: new Date(),
 };
-
-function groupToolCalls(
-  calls: ToolCall[]
-): { name: string; count: number; allDone: boolean }[] {
-  const groups: { name: string; count: number; allDone: boolean }[] = [];
-  for (const tc of calls) {
-    const last = groups[groups.length - 1];
-    if (last && last.name === tc.name) {
-      last.count++;
-      if (!tc.result) last.allDone = false;
-    } else {
-      groups.push({ name: tc.name, count: 1, allDone: !!tc.result });
-    }
-  }
-  return groups;
-}
 
 export function ChatPanel() {
   const { sessionId, setMapMarkers, setGraphData, panMapTo, setMainView } =
@@ -82,16 +68,65 @@ export function ChatPanel() {
 
   // Persist messages to sessionStorage
   useEffect(() => {
-    const toStore = messages.map((m) => ({
-      ...m,
-      isStreaming: false,
-      toolCalls: m.toolCalls?.map((tc) => ({
-        name: tc.name,
-        result: tc.result ? "done" : undefined,
-      })),
-    }));
-    sessionStorage.setItem(MESSAGES_KEY, JSON.stringify(toStore));
+    try {
+      const toStore = messages.map((m) => ({
+        ...m,
+        isStreaming: false,
+        toolCalls: m.toolCalls?.map((tc) => ({
+          name: tc.name,
+          result: tc.result ? "done" : undefined,
+        })),
+      }));
+      sessionStorage.setItem(MESSAGES_KEY, JSON.stringify(toStore));
+    } catch {
+      // Storage full or unavailable — continue without persistence
+    }
   }, [messages]);
+
+  // Backfill messages from backend if sessionStorage was cleared but session persists
+  useEffect(() => {
+    if (messages.length > 1) return;
+    if (typeof window === "undefined") return;
+    try {
+      if (!sessionStorage.getItem("tfl-session-id")) return;
+    } catch {
+      return;
+    }
+
+    getChatHistory(sessionId)
+      .then((data) => {
+        if (!data.messages || data.messages.length === 0) return;
+        const backfilled: Message[] = [
+          WELCOME_MESSAGE,
+          ...data.messages.map(
+            (m: { role: string; content: string; timestamp: string | null }, i: number) => ({
+              id: `backfill-${i}`,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+              timestamp: new Date(m.timestamp || Date.now()),
+            })
+          ),
+        ];
+        setMessages(backfilled);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  const handleClearChat = async () => {
+    try {
+      await clearSession(sessionId);
+    } catch {
+      // Backend clear failed — still reset frontend
+    }
+    const newId = uuid();
+    try {
+      sessionStorage.setItem("tfl-session-id", newId);
+    } catch {}
+    useAppStore.setState({ sessionId: newId });
+    setMessages([WELCOME_MESSAGE]);
+    useAppStore.getState().clearSelection();
+  };
 
   const processToolResult = (resultData: unknown) => {
     try {
@@ -322,12 +357,25 @@ export function ChatPanel() {
   return (
     <Flex direction="column" h="100%" bg="gray.50" borderRight={{ base: "none", lg: "1px solid" }} borderColor="gray.200">
       <Box p={4} borderBottom="1px solid" borderColor="gray.200" bg="white">
-        <Heading as="h1" size="md" color="blue.700">
-          TfL Explorer
-        </Heading>
-        <Text fontSize="xs" color="gray.500">
-          London Transport Assistant
-        </Text>
+        <Flex justify="space-between" align="center">
+          <Box>
+            <Heading as="h1" size="md" color="blue.700">
+              TfL Explorer
+            </Heading>
+            <Text fontSize="xs" color="gray.500">
+              London Transport Assistant
+            </Text>
+          </Box>
+          <Button
+            size="xs"
+            variant="ghost"
+            color="gray.500"
+            onClick={handleClearChat}
+            disabled={isLoading}
+          >
+            New chat
+          </Button>
+        </Flex>
       </Box>
 
       {/* Messages */}
@@ -389,6 +437,16 @@ export function ChatPanel() {
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
+
+  const toggleGroup = (index: number) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
 
   return (
     <Flex justify={isUser ? "flex-end" : "flex-start"}>
@@ -411,13 +469,16 @@ function MessageBubble({ message }: { message: Message }) {
                   borderRadius="md"
                   fontSize="xs"
                 >
-                  <HStack>
+                  <HStack
+                    cursor={group.count > 1 ? "pointer" : undefined}
+                    onClick={group.count > 1 ? () => toggleGroup(i) : undefined}
+                  >
                     <Badge colorPalette="purple" size="sm">
                       {group.name}
                     </Badge>
                     {group.count > 1 && (
                       <Text fontSize="xs" color="gray.500">
-                        x{group.count}
+                        x{group.count} {expandedGroups.has(i) ? "▾" : "▸"}
                       </Text>
                     )}
                     {!group.allDone && <Spinner size="xs" />}
@@ -427,6 +488,27 @@ function MessageBubble({ message }: { message: Message }) {
                       </Text>
                     )}
                   </HStack>
+                  {expandedGroups.has(i) && group.count > 1 && (
+                    <VStack
+                      align="stretch"
+                      gap={0.5}
+                      mt={1}
+                      pl={2}
+                      borderLeft="2px solid"
+                      borderColor={isUser ? "blue.500" : "gray.300"}
+                    >
+                      {group.calls.map((tc, j) => (
+                        <Text
+                          key={j}
+                          fontSize="xs"
+                          color={isUser ? "blue.200" : "gray.500"}
+                          lineClamp={1}
+                        >
+                          {tc.name} {tc.result ? "done" : "..."}
+                        </Text>
+                      ))}
+                    </VStack>
+                  )}
                 </Box>
               ))}
             </VStack>

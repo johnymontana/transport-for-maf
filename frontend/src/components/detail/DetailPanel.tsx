@@ -40,17 +40,20 @@ export function DetailPanel() {
     Array<{ id: string; category: string; preference: string }>
   >([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load station details when selected
   useEffect(() => {
     if (!selectedStation) {
       setStationDetails(null);
+      setError(null);
       return;
     }
     setLoading(true);
+    setError(null);
     getStationDetails(selectedStation.naptanId)
       .then((data) => setStationDetails(data as unknown as StationDetails))
-      .catch(console.error)
+      .catch(() => setError("Failed to load station details"))
       .finally(() => setLoading(false));
   }, [selectedStation]);
 
@@ -68,6 +71,12 @@ export function DetailPanel() {
         {loading && (
           <Box textAlign="center" py={8}>
             <Spinner />
+          </Box>
+        )}
+
+        {error && !loading && (
+          <Box textAlign="center" py={8}>
+            <Text color="red.500" fontSize="sm">{error}</Text>
           </Box>
         )}
 

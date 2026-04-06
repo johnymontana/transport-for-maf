@@ -1,16 +1,7 @@
 import { create } from "zustand";
 import type { GraphData, Line, MapMarker, MemoryLocation, Station } from "@/lib/types";
 import { getStations } from "@/lib/api";
-import { v4 as uuid } from "uuid";
-
-const getOrCreateSessionId = (): string => {
-  if (typeof window === "undefined") return uuid();
-  const stored = sessionStorage.getItem("tfl-session-id");
-  if (stored) return stored;
-  const id = uuid();
-  sessionStorage.setItem("tfl-session-id", id);
-  return id;
-};
+import { getOrCreateSessionId } from "@/lib/chatUtils";
 
 export type MainView = "map" | "graph" | "memory";
 export type MobilePanel = "chat" | "main" | "detail";

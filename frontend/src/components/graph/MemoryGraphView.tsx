@@ -42,6 +42,21 @@ function getMemoryNodeColor(type: string): string {
   return NODE_COLORS[type] || "#888888";
 }
 
+function formatPropertyValue(value: unknown): string {
+  if (typeof value === "object" && value !== null) {
+    return JSON.stringify(value, null, 2);
+  }
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+    try {
+      return new Date(s).toLocaleString();
+    } catch {
+      return s;
+    }
+  }
+  return s;
+}
+
 export function MemoryGraphView() {
   const { sessionId, setMemoryLocations, setMainView } = useAppStore();
   const [memoryData, setMemoryData] = useState<GraphData | null>(null);
@@ -297,9 +312,7 @@ export function MemoryGraphView() {
                           {key}
                         </Text>
                         <Text color="gray.800" wordBreak="break-word">
-                          {typeof value === "object"
-                            ? JSON.stringify(value, null, 2)
-                            : String(value)}
+                          {formatPropertyValue(value)}
                         </Text>
                       </Box>
                     ))}
@@ -342,9 +355,7 @@ export function MemoryGraphView() {
                           {key}
                         </Text>
                         <Text color="gray.800" wordBreak="break-word">
-                          {typeof value === "object"
-                            ? JSON.stringify(value, null, 2)
-                            : String(value)}
+                          {formatPropertyValue(value)}
                         </Text>
                       </Box>
                     ))}

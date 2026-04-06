@@ -46,9 +46,14 @@ export function LineStatusBanner() {
       .catch(() => {});
   }, []);
 
+  // Track scroll overflow on mount, resize, and content changes
   useEffect(() => {
-    checkScroll();
-  }, [lines, checkScroll]);
+    const el = scrollRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => checkScroll());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [checkScroll]);
 
   const handleLineClick = async (line: LineInfo) => {
     // Toggle off if already selected
@@ -184,8 +189,11 @@ export function LineStatusBanner() {
           borderRadius="sm"
           flexShrink={0}
           cursor="pointer"
+          tabIndex={0}
+          role="button"
           _hover={{ opacity: 0.8 }}
           onClick={() => clearSelection()}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); clearSelection(); } }}
         >
           All
         </Badge>
@@ -208,11 +216,14 @@ export function LineStatusBanner() {
               borderRadius="sm"
               flexShrink={0}
               cursor="pointer"
+              tabIndex={0}
+              role="button"
               opacity={isLoading ? 0.6 : 1}
               outline={isSelected ? "2px solid white" : "none"}
               outlineOffset="1px"
               _hover={{ opacity: 0.8 }}
               onClick={() => handleLineClick(line)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleLineClick(line); } }}
             >
               {line.name}
             </Badge>

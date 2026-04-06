@@ -1,5 +1,6 @@
 .PHONY: install install-backend install-frontend dev dev-backend dev-frontend \
-       docker-up docker-down download-tfl load-data data-refresh clean
+       docker-up docker-down download-tfl load-data data-refresh clean \
+       test test-backend test-frontend
 
 # Install all dependencies
 install: install-backend install-frontend
@@ -35,6 +36,15 @@ load-data:
 	cd scripts && uv run python load_graph.py
 
 data-refresh: download-tfl load-data
+
+# Tests
+test: test-backend test-frontend
+
+test-backend:
+	cd backend && uv run pytest tests/ -m unit
+
+test-frontend:
+	cd frontend && npm test
 
 # Cleanup
 clean:

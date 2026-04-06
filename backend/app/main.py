@@ -185,6 +185,29 @@ async def chat_sync(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/chat/history")
+async def get_chat_history(
+    session_id: str = Query(...),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Retrieve full conversation history for a session."""
+    client = get_memory_client()
+    try:
+        conversation = await client.short_term.get_conversation(session_id, limit=limit)
+        messages = [
+            {
+                "role": m.role.value if hasattr(m.role, "value") else str(m.role),
+                "content": m.content,
+                "timestamp": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in conversation.messages
+        ]
+        return {"messages": messages}
+    except Exception as e:
+        logger.exception("Error fetching chat history")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- Memory Endpoints ---
 
 

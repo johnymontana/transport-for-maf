@@ -63,6 +63,20 @@ export async function* streamChat(
   }
 }
 
+// --- Chat history ---
+
+export async function getChatHistory(
+  sessionId: string
+): Promise<{
+  messages: Array<{ role: string; content: string; timestamp: string | null }>;
+}> {
+  const resp = await fetch(
+    `${API_BASE}/chat/history?session_id=${sessionId}&limit=50`
+  );
+  if (!resp.ok) throw new Error("Failed to load chat history");
+  return resp.json();
+}
+
 // --- Transport endpoints ---
 
 export async function getStations(): Promise<{ stations: Station[] }> {
